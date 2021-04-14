@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-
+#include <time.h>
 #include "misc.h"
 #include "lz77.h"
 
@@ -19,7 +19,7 @@
 #define MAXCHAIN 16
 //#define LAZY_MATCHING_DONE 0
 //#define LONGEST_MATCH 0
-#define MAXLEN 457895456 
+#define MAXLEN 4954496 
 
 struct LZ77 
 {
@@ -661,8 +661,8 @@ void match(LZ77 *lz, void *vctx, int distance, int len)
     assert(len <= MAXMATCHLEN);
     //assert(!memcmp(ctx->data + ctx->ptr, ctx->data + ctx->ptr - distance, len));
 
-    printf("<%d,%d>", distance, len);
-    fflush(stdout);
+    //printf("<%d,%d>", distance, len);
+    //fflush(stdout);
 	int lend, lenl;
 	char d[32768];
 	char l[258];
@@ -702,8 +702,8 @@ void literal(LZ77 *lz, void *vctx, unsigned char c)
     //assert(c == (unsigned char)(ctx->data[ctx->ptr]));
 	lz->result[lz->resultlen] = c;
 	lz->resultlen++;
-	fputc(c, stdout);
-    fflush(stdout);
+	//fputc(c, stdout);
+    //fflush(stdout);
 
     ctx->ptr++;
 }
@@ -717,13 +717,16 @@ void dotest(const void *data, int len, int step)
 	t.data = data;
     t.len = len;
     t.ptr = 0;
-    lz = lz77_new(literal, match, &t);
+	int size;
+	lz = lz77_new(literal, match, &t);
     for (j = 0; j < t.len; j += step)
 	lz77_compress(lz, t.data + j, (t.len - j < step ? t.len - j : step));
 	//lz77_flush(lz);
-	for (int i = 0; i <= lz->resultlen; i++)
-		printf("%c", lz->result[i]);
-    lz77_free(lz);
+	//for (int i = 0; i <= lz->resultlen; i++)
+		//printf("%c", lz->result[i]);
+	//size = sizeof();
+	printf("\nsize = %d\n", lz->resultlen);
+	lz77_free(lz);
     //assert(t.len == t.ptr);
     printf("\n");
 }
@@ -731,7 +734,8 @@ void dotest(const void *data, int len, int step)
 
 int main(int argc, char **argv)
 {
-    int i, len, truncate = 0;
+    clock_t begin = clock();
+	int i, len, truncate = 0;
 	int step;
     char *filename = NULL;
 
@@ -761,9 +765,10 @@ int main(int argc, char **argv)
 	    }
 	    data[datalen++] = c;
 	}
-
+	
 	fclose(fp);
 	dotest(data, datalen, step);
+	printf("\nsize of raw data = %d\n", datasize);
 	
     } else {
 	for(i = 0; i < lenof(tests); i++) 
@@ -775,6 +780,8 @@ int main(int argc, char **argv)
 	    }
 	}
     }
-
-    return 0;
+	clock_t end = clock();
+	double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+	printf("%f", time_spent);
+	return 0;
 }
