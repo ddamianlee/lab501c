@@ -19,6 +19,7 @@
 #define MAXCHAIN 16
 //#define LAZY_MATCHING_DONE 0
 //#define LONGEST_MATCH 0
+#define MAXLEN 457895456 
 
 struct LZ77 
 {
@@ -26,8 +27,8 @@ struct LZ77
      * Administrative data passed in from lz77_new().
      */
     void *ctx;
-    void (*literal)(void *ctx, unsigned char c);
-    void (*match)(void *ctx, int distance, int len);
+    void (*literal)(LZ77 *lz, void *ctx, unsigned char c);
+    void (*match)(LZ77 *lz, void *ctx, int distance, int len);
 
     
     unsigned char data[WINSIZE+HASHCHARS];
@@ -68,6 +69,9 @@ struct LZ77
 	unsigned char literals[HASHCHARS * (HASHCHARS+1)];
 	//unsigned char currchar[HASHCHARS];
 	int matchstart;
+	unsigned char result[MAXLEN];
+	int resultdl[MAXLEN];
+	int resultlen;
 };
 
 static int lz77_hash(const unsigned char *data) {
@@ -120,7 +124,14 @@ LZ77 *lz77_new(void (*literal)(void *ctx, unsigned char c),
     lz->nvalid = 0;
     lz->rewound = 0;
 
-    return lz;
+	for (i = 0; i < MAXLEN; i++)
+	{
+		lz->result[i] = 0;
+		lz->resultdl[i] = 0;
+	}
+
+	lz->resultlen = 0;
+	return lz;
 }
 
 void lz77_free(LZ77 *lz)
@@ -318,7 +329,7 @@ void lz77_compress(LZ77 *lz, const void *vdata, int len)
 		/* 如果是第一次出現3個一組，輸出第一個 */
 		if (lz->k == HASHCHARS && lz->matchhead[0] < 0) 
 		{
-			lz->literal(lz->ctx, currchars[HASHCHARS-1]);
+			lz->literal(lz, lz->ctx, currchars[HASHCHARS-1]);
 			lz->k--;
 		}
 		
@@ -341,7 +352,7 @@ void lz77_compress(LZ77 *lz, const void *vdata, int len)
 			
 			if(lz->k == MAXMATCHLEN)
 			{
-				lz->match(lz->ctx, lz->matchdist[lz->matchstart], lz->matchlen[lz->matchstart]);
+				lz->match(lz, lz->ctx, lz->matchdist[lz->matchstart], lz->matchlen[lz->matchstart]);
 				lz->k -= lz->matchlen[lz->matchstart];
 				LONGEST_MATCH = 0;
 				LAZY_MATCHING_DONE = 0;
@@ -352,7 +363,7 @@ void lz77_compress(LZ77 *lz, const void *vdata, int len)
 			if(newchardist == -1)
 			{
 				//printf("aa");
-				lz->match(lz->ctx, lz->matchdist[lz->matchstart], lz->matchlen[lz->matchstart]);
+				lz->match(lz, lz->ctx, lz->matchdist[lz->matchstart], lz->matchlen[lz->matchstart]);
 				lz->k -= lz->matchlen[lz->matchstart];
 				LONGEST_MATCH = 0;
 				LAZY_MATCHING_DONE = 0;
@@ -367,7 +378,7 @@ void lz77_compress(LZ77 *lz, const void *vdata, int len)
 				if(newchardist != lz->matchdist[lz->matchstart])
 				{
 					//printf("x");
-					lz->match(lz->ctx, lz->matchdist[lz->matchstart], lz->matchlen[lz->matchstart]);
+					lz->match(lz, lz->ctx, lz->matchdist[lz->matchstart], lz->matchlen[lz->matchstart]);
 					lz->k -= lz->matchlen[lz->matchstart];
 					LONGEST_MATCH = 0;
 					LAZY_MATCHING_DONE = 0;
@@ -407,7 +418,7 @@ void lz77_compress(LZ77 *lz, const void *vdata, int len)
 				{
 					//printf("NN");
 					//printf("%d", lz->matchdist[0]);
-					lz->match(lz->ctx, lz->matchdist[0], lz->matchlen[0]);
+					lz->match(lz, lz->ctx, lz->matchdist[0], lz->matchlen[0]);
 					lz->k -= lz->matchlen[0];
 					//lz77_cleanmatch(lz, 0, 2);
 					break;
@@ -416,7 +427,7 @@ void lz77_compress(LZ77 *lz, const void *vdata, int len)
 				{
 					//printf("NY");
 					for (int i = 0; i < 2; i++)
-						lz->literal(lz->ctx, lz->literals[i]);	
+						lz->literal(lz, lz->ctx, lz->literals[i]);
 					lz->k -= i;
 					LAZY_MATCHING_DONE = 1;
 					LONGEST_MATCH = 1;
@@ -451,7 +462,7 @@ void lz77_compress(LZ77 *lz, const void *vdata, int len)
 					{
 						//printf("YYN");
 						/*並沒有比較長所以輸出前面找到的match */
-						lz->match(lz->ctx, lz->matchdist[0], lz->matchlen[0]);
+						lz->match(lz, lz->ctx, lz->matchdist[0], lz->matchlen[0]);
 						lz->k -= lz->matchlen[0];
 						lz77_cleanmatch(lz, 0, 3);
 					}
@@ -459,7 +470,7 @@ void lz77_compress(LZ77 *lz, const void *vdata, int len)
 					{
 						//printf("YNY");
 						lz->matchlen[1] = ++lz->matchlen[0];
-						lz->literal(lz->ctx, lz->literals[0]);
+						lz->literal(lz, lz->ctx, lz->literals[0]);
 						lz->k--;
 						LAZY_MATCHING_DONE = 1;
 						LONGEST_MATCH = 1;
@@ -483,12 +494,11 @@ void lz77_compress(LZ77 *lz, const void *vdata, int len)
 
 	/* 當len已經等於0的時候還有東西沒輸出 */
 	if(LAZY_MATCHING_DONE == 1 && LONGEST_MATCH == 1)
-		lz->match(lz->ctx, lz->matchdist[lz->matchstart], lz->matchlen[lz->matchstart]);
-	
+		lz->match(lz, lz->ctx, lz->matchdist[lz->matchstart], lz->matchlen[lz->matchstart]);
 	if(LAZY_MATCHING_DONE == 1 && LONGEST_MATCH == 0)
 	{
 		for (int i = 0; i < lz->k; i++)
-			lz->literal(lz->ctx, currchars[i]);
+			lz->literal(lz, lz->ctx, currchars[i]);
 	}
 
 	if(LAZY_MATCHING_DONE == 0 && lz->hashhead[hash] != 0)
@@ -496,16 +506,16 @@ void lz77_compress(LZ77 *lz, const void *vdata, int len)
 		switch(lz->k)
 		{
 			case 3:
-				lz->match(lz->ctx, lz->matchdist[0], lz->matchlen[0]);
+				lz->match(lz, lz->ctx, lz->matchdist[0], lz->matchlen[0]);
 				break;
 			case 4:
-				lz->match(lz->ctx, lz->matchdist[0], lz->matchlen[0]);
-				lz->literal(lz->ctx, currchars[0]);
+				lz->match(lz, lz->ctx, lz->matchdist[0], lz->matchlen[0]);
+				lz->literal(lz, lz->ctx, currchars[0]);
 				break;
 			case 5:
-				lz->match(lz->ctx, lz->matchdist[0], lz->matchlen[0]);
+				lz->match(lz, lz->ctx, lz->matchdist[0], lz->matchlen[0]);
 				for (int i = 0; i < lz->k; i++)
-					lz->literal(lz->ctx, currchars[i]);
+					lz->literal(lz, lz->ctx, currchars[i]);
 				break;
 			/*
 			 *應該還能再做比較看哪一個match比較輸出哪個
@@ -518,7 +528,7 @@ void lz77_compress(LZ77 *lz, const void *vdata, int len)
 	{
 		lz->k--;
 		for (lz->k; lz->k >= 0 ; lz->k--)
-			lz->literal(lz->ctx, lz->data[lz->winpos + lz->k]);
+			lz->literal(lz, lz->ctx, lz->data[lz->winpos + lz->k]);
 	}
 }
 
@@ -640,11 +650,11 @@ struct testctx
     int len, ptr;
 };
 
-void match(void *vctx, int distance, int len)
+void match(LZ77 *lz, void *vctx, int distance, int len)
 {
-    struct testctx *ctx = (struct testctx *)vctx;
-
-    assert(distance > 0);
+	struct testctx *ctx = (struct testctx *)vctx;
+	
+	assert(distance > 0);
     //assert(distance <= ctx->ptr);
     assert(len >= HASHCHARS);
     //assert(len <= ctx->len - ctx->ptr);
@@ -653,18 +663,46 @@ void match(void *vctx, int distance, int len)
 
     printf("<%d,%d>", distance, len);
     fflush(stdout);
+	int lend, lenl;
+	char d[32768];
+	char l[258];
+	sprintf(d, "%d", distance);
+	sprintf(l, "%d", len);
+	lend = strlen(d);
+	lenl = strlen(l);
+	//printf("lend = %d", lend);
+	//printf("len = %d", lenl);
+	char dist[lend];
+
+	char lenn[lenl];
+	//strcpy(dist, d);
+	//strcpy(lenn, l);
+	int i;
+	for (i = 0; i < lend; i++)
+	{
+		//printf("=%c", dist[i]);
+		lz->result[lz->resultlen] = d[i];
+		lz->resultlen++;
+	}
+	//lz->resultlen++;
+	for (i = 0; i < lenl; i++)
+	{
+		lz->result[lz->resultlen] = l[i];
+		lz->resultlen++;
+	}
+
 
     ctx->ptr += len;
 }
 
-void literal(void *vctx, unsigned char c)
+void literal(LZ77 *lz, void *vctx, unsigned char c)
 {
     struct testctx *ctx = (struct testctx *)vctx;
-
-    //assert(ctx->ptr < ctx->len);
+	//assert(ctx->ptr < ctx->len);
     //assert(c == (unsigned char)(ctx->data[ctx->ptr]));
-
-    fputc(c, stdout);
+	lz->result[lz->resultlen] = c;
+	lz->resultlen++;
+	fputc(c, stdout);
     fflush(stdout);
 
     ctx->ptr++;
@@ -675,14 +713,16 @@ void dotest(const void *data, int len, int step)
     struct testctx t;
     LZ77 *lz;
     int j;
-
-    t.data = data;
+	int i;
+	t.data = data;
     t.len = len;
     t.ptr = 0;
     lz = lz77_new(literal, match, &t);
     for (j = 0; j < t.len; j += step)
 	lz77_compress(lz, t.data + j, (t.len - j < step ? t.len - j : step));
 	//lz77_flush(lz);
+	for (int i = 0; i <= lz->resultlen; i++)
+		printf("%c", lz->result[i]);
     lz77_free(lz);
     //assert(t.len == t.ptr);
     printf("\n");
@@ -726,7 +766,7 @@ int main(int argc, char **argv)
 	dotest(data, datalen, step);
 	
     } else {
-	for (i = 0; i < lenof(tests); i++) 
+	for(i = 0; i < lenof(tests); i++) 
 	{
 	    for (len = (truncate ? 0 : strlen(tests[i]));
 		 len <= strlen(tests[i]); len++) 
