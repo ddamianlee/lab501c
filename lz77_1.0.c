@@ -5,7 +5,7 @@
 #include <time.h>
 #include "misc.h"
 #include "lz77.h"
-
+#include <libpmemobj.h>
 
 #define MAXMATCHDIST 32768	       /* maximum backward distance */
 #define MAXMATCHLEN 258		       /* maximum length of a match */
@@ -20,6 +20,15 @@
 //#define LAZY_MATCHING_DONE 0
 //#define LONGEST_MATCH 0
 #define MAXLEN 4954496 
+
+POBJ_LAYOUT_BEGIN(rstore);
+POBJ_LAYOUT_ROOT(rstore, struct my_root);
+POBJ_LAYOUT_END(rstore);
+
+struct my_root
+{
+	char r[MAXLEN];
+};
 
 struct LZ77 
 {
@@ -70,7 +79,6 @@ struct LZ77
 	//unsigned char currchar[HASHCHARS];
 	int matchstart;
 	unsigned char result[MAXLEN];
-	int resultdl[MAXLEN];
 	int resultlen;
 };
 
@@ -125,10 +133,7 @@ LZ77 *lz77_new(void (*literal)(void *ctx, unsigned char c),
     lz->rewound = 0;
 
 	for (i = 0; i < MAXLEN; i++)
-	{
 		lz->result[i] = 0;
-		lz->resultdl[i] = 0;
-	}
 
 	lz->resultlen = 0;
 	return lz;
@@ -726,7 +731,7 @@ void dotest(const void *data, int len, int step)
 		//printf("%c", lz->result[i]);
 	//size = sizeof();
 	printf("\nsize = %d\n", lz->resultlen);
-	lz77_free(lz);
+
     //assert(t.len == t.ptr);
     printf("\n");
 }
@@ -738,7 +743,7 @@ int main(int argc, char **argv)
 	int i, len, truncate = 0;
 	int step;
     char *filename = NULL;
-
+	LZ77 *lz;
     step = 48000;		       /* big step by default */
 
     while (--argc) {
@@ -753,6 +758,15 @@ int main(int argc, char **argv)
     }
 
     if (filename) {
+	
+	/* PMEM */
+	PMEMobjpool *pop = pmemobj_create(argv[1], POBJ_LAYOUT_NAME(rstore), MAXLEN, 0666);
+	if(pop == NULL)
+	{
+		perror("pmemobj_create");
+		return 1;
+	}
+
 	char *data = NULL;
 	int datalen = 0, datasize = 0;
 	int c;
@@ -769,7 +783,17 @@ int main(int argc, char **argv)
 	fclose(fp);
 	dotest(data, datalen, step);
 	printf("\nsize of raw data = %d\n", datasize);
+
+	TOID(struct my_root) root = POBJ_ROOT(pop, struct my_root);
 	
+	TX_BEGIN(pop)
+	{
+		TX_MEMCPY(D_RW(root)->r, lz->result, strlen(lz->result));
+	} TX_END
+
+	pmemobj_close(pop);
+	lz77_free(lz);	
+
     } else {
 	for(i = 0; i < lenof(tests); i++) 
 	{
@@ -777,7 +801,8 @@ int main(int argc, char **argv)
 		 len <= strlen(tests[i]); len++) 
 		{
 		dotest(tests[i], len, step);
-	    }
+		lz77_free(lz);
+		}
 	}
     }
 	clock_t end = clock();
