@@ -722,6 +722,7 @@ void dotest(PMEMoid *pop, const void *data, int len, int step)
     LZ77 *lz;
     int j;
 	int i;
+	char string[MAXLEN + 1];
 	t.data = data;
     t.len = len;
     t.ptr = 0;
@@ -731,19 +732,28 @@ void dotest(PMEMoid *pop, const void *data, int len, int step)
 	lz77_compress(lz, t.data + j, (t.len - j < step ? t.len - j : step));
 	//lz77_flush(lz);
 	//for (int i = 0; i <= lz->resultlen; i++)
-		//printf("%c", lz->result[i]);
+	//	printf("%c", lz->result[i]);
 	//size = sizeof();
 	printf("\nsize = %d\n", lz->resultlen);
+	
+	memcpy(string, lz->result, MAXLEN + 1);
+	string[MAXLEN + 1] = '\0';
+	printf("%s", string);
 	TOID(struct my_root) root = POBJ_ROOT(pop, struct my_root);
-
+	
+	/* persist write */
 	TX_BEGIN(pop)
 	{
-		TX_MEMCPY(D_RW(root)->r, lz->result, strlen(lz->result));
+		TX_MEMCPY(D_RW(root)->r, string, MAXLEN + 1);
 	} TX_END
+	
+	printf("persist!");
+	
+	/* read data in optane */
+	printf("%s", D_RO(root)->r);
 
 	pmemobj_close(pop);
 	lz77_free(lz);
-	printf("persist!");
 
     //assert(t.len == t.ptr);
     printf("\n");
@@ -770,31 +780,18 @@ int main(int argc, char **argv)
 	//}
     //}
 	filename = argv[2];
-
+	
+	/* PMEM pointer */
 	PMEMobjpool *pop = pmemobj_create(argv[1], POBJ_LAYOUT_NAME(rstore), PMEMOBJ_MIN_POOL, 0666);
-
 	if(pop == NULL)
 	{
 		perror("pmemobj_create");
-			//printf("a");
 		return 1;
 	}
-    if (filename) {
+   
+
+	if (filename) {
 	
-	
-	//const char *path = argv[1];
-
-//	if(file_exists(path) != 0)
-//	{
-
-//		printf("a");
-		/* PMEM */
-//	}
-//	else
-//	{
-//		printf("ok");
-//	}
-
 	char *data = NULL;
 	int datalen = 0, datasize = 0;
 	int c;
