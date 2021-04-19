@@ -739,20 +739,22 @@ int main(int argc, char **argv)
 	int step;
     char *filename = NULL;
 
-    step = 48000;		       /* big step by default */
+	LZ77 *lz;
+	step = 48000;		       /* big step by default */
 
-    while (--argc) {
-	char *p = *++argv;
-	if (!strcmp(p, "-t")) {
-	    truncate = 1;
-	} else if (p[0] == '-' && p[1] == 'b') {
-	    step = atoi(p+2);	       /* -bN sets block size to N */
-	} else if (p[0] != '-') {
-	    filename = p;
-	}
-    }
+    // while (--argc) {
+	// char *p = *++argv;
+	// if (!strcmp(p, "-t")) {
+	//     truncate = 1;
+	// } else if (p[0] == '-' && p[1] == 'b') {
+	//     step = atoi(p+2);	       /* -bN sets block size to N */
+	// } else if (p[0] != '-') {
+	//     filename = p;
+	// }
+    // }
+	filename = argv[1];
 
-    if (filename) {
+	if (filename) {
 	char *data = NULL;
 	int datalen = 0, datasize = 0;
 	int c;
@@ -782,6 +784,6 @@ int main(int argc, char **argv)
     }
 	clock_t end = clock();
 	double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-	printf("%f", time_spent);
+	printf("total time = %f\n", time_spent);
 	return 0;
 }
