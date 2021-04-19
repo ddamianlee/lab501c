@@ -8,7 +8,7 @@
 #include <libpmemobj.h>
 //#include "ex_common.h"
 //#include <sys/stat.h>
-//#include "layout.h"
+#include "layout.h"
 #define MAXMATCHDIST 32768	       /* maximum backward distance */
 #define MAXMATCHLEN 258		       /* maximum length of a match */
 #define HASHMAX 2039		       /* one more than max hash value */
@@ -21,17 +21,17 @@
 #define MAXCHAIN 16
 //#define LAZY_MATCHING_DONE 0
 //#define LONGEST_MATCH 0
-#define MAXLEN 4954496 
+//#define MAXLEN 4954496 
 
-POBJ_LAYOUT_BEGIN(rstore);
-POBJ_LAYOUT_ROOT(rstore, struct my_root);
-POBJ_LAYOUT_END(rstore);
+//POBJ_LAYOUT_BEGIN(rstore);
+//POBJ_LAYOUT_ROOT(rstore, struct my_root);
+//POBJ_LAYOUT_END(rstore);
 
 
-struct my_root
-{
-	char r[MAXLEN];
-};
+//struct my_root
+//{
+//	char r[MAXLEN + 1];
+//};
 
 struct LZ77 
 {
@@ -81,7 +81,7 @@ struct LZ77
 	unsigned char literals[HASHCHARS * (HASHCHARS+1)];
 	//unsigned char currchar[HASHCHARS];
 	int matchstart;
-	unsigned char result[MAXLEN];
+	unsigned char result[MAXLEN + 1];
 	int resultlen;
 };
 
@@ -716,13 +716,15 @@ void literal(LZ77 *lz, void *vctx, unsigned char c)
     ctx->ptr++;
 }
 
-void dotest(PMEMoid *pop, const void *data, int len, int step)
+void dotest(PMEMobjpool *pop, const void *data, int len, int step)
 {
     struct testctx t;
     LZ77 *lz;
     int j;
 	int i;
-	char string[MAXLEN + 1];
+	int slen, resultsize;
+	//char string[MAXLEN + 1];
+	//char *string2 = '123';
 	t.data = data;
     t.len = len;
     t.ptr = 0;
@@ -733,24 +735,30 @@ void dotest(PMEMoid *pop, const void *data, int len, int step)
 	//lz77_flush(lz);
 	//for (int i = 0; i <= lz->resultlen; i++)
 	//	printf("%c", lz->result[i]);
-	//size = sizeof();
-	printf("\nsize = %d\n", lz->resultlen);
-	
-	memcpy(string, lz->result, MAXLEN + 1);
-	string[MAXLEN + 1] = '\0';
-	printf("%s", string);
+	resultsize = sizeof(lz->result) / sizeof(lz->result[0]);
+	//memcpy(string, lz->result, MAXLEN);
+	lz->result[MAXLEN + 1] = '\0';
+	printf("%s\n", lz->result);
+	printf("\nstringsize = %d\n", lz->resultlen);
+	printf("resultsize = %d\n", resultsize);
+	slen = strlen(lz->result);
+	printf("string length = %d", slen);
 	TOID(struct my_root) root = POBJ_ROOT(pop, struct my_root);
 	
 	/* persist write */
 	TX_BEGIN(pop)
 	{
-		TX_MEMCPY(D_RW(root)->r, string, MAXLEN + 1);
+		TX_MEMCPY(D_RW(root)->r, lz->result, strlen(lz->result));
 	} TX_END
-	
-	printf("persist!");
+	//if(OID_IS_NULL(root))
+	//{
+	//	printf("cannot access root object");
+	//	return 1;
+	//}
+	//printf("persist!");
 	
 	/* read data in optane */
-	printf("%s", D_RO(root)->r);
+	//printf("%s", D_RO(root)->r);
 
 	pmemobj_close(pop);
 	lz77_free(lz);
@@ -790,14 +798,17 @@ int main(int argc, char **argv)
 	}
    
 
-	if (filename) {
+	if (filename)
+	{
 	
 	char *data = NULL;
 	int datalen = 0, datasize = 0;
 	int c;
 	FILE *fp = fopen(filename, "rb");
 
-	while ( (c = fgetc(fp)) != EOF) {
+	//char buf[] = "abc";
+
+	while ( (c = fgetc(fp)) != EOF){ 
 	    if (datalen >= datasize) {
 		datasize = (datalen * 3 / 2) + 512;
 		data = realloc(data, datasize);
@@ -808,6 +819,17 @@ int main(int argc, char **argv)
 	fclose(fp);
 	dotest(pop, data, datalen, step);
 	printf("\nsize of raw data = %d\n", datasize);
+	
+	//TOID(struct my_root) root = POBJ_ROOT(pop, struct my_root);
+	//TX_BEGIN(pop)
+	//{
+	//	TX_MEMCPY(D_RW(root)->r, buf, strlen(buf));
+	//} TX_END
+	
+
+	//printf("%s", D_RO(root)->r);
+
+	//pmemobj_close(pop);
 
 
     } else {
