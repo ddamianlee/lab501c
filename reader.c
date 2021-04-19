@@ -8,12 +8,14 @@
 #include <stdio.h>
 #include <string.h>
 #include <libpmemobj.h>
-
+#include <time.h>
 #include "layout.h"
 
 int
 main(int argc, char *argv[])
 {
+	time_t begin = clock();
+	
 	if (argc != 2) {
 		printf("usage: %s file-name\n", argv[0]);
 		return 1;
@@ -30,6 +32,10 @@ main(int argc, char *argv[])
 	printf("%s\n", D_RO(root)->r);
 
 	pmemobj_close(pop);
+	
+	time_t end = clock();
+	double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+	printf("total time : %f\n", time_spent);
 
 	return 0;
 }
