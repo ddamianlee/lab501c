@@ -738,7 +738,7 @@ void dotest(PMEMobjpool *pop, const void *data, int len, int step)
 	resultsize = sizeof(lz->result) / sizeof(lz->result[0]);
 	//memcpy(string, lz->result, MAXLEN);
 	lz->result[MAXLEN + 1] = '\0';
-	printf("%s\n", lz->result);
+	//printf("%s\n", lz->result);
 	printf("\nstringsize = %d\n", lz->resultlen);
 	printf("resultsize = %d\n", resultsize);
 	slen = strlen(lz->result);
