@@ -6,7 +6,9 @@
 #include "misc.h"
 #include "lz77.h"
 #include <libpmemobj.h>
-
+//#include "ex_common.h"
+//#include <sys/stat.h>
+//#include "layout.h"
 #define MAXMATCHDIST 32768	       /* maximum backward distance */
 #define MAXMATCHLEN 258		       /* maximum length of a match */
 #define HASHMAX 2039		       /* one more than max hash value */
@@ -24,6 +26,7 @@
 POBJ_LAYOUT_BEGIN(rstore);
 POBJ_LAYOUT_ROOT(rstore, struct my_root);
 POBJ_LAYOUT_END(rstore);
+
 
 struct my_root
 {
@@ -713,7 +716,7 @@ void literal(LZ77 *lz, void *vctx, unsigned char c)
     ctx->ptr++;
 }
 
-void dotest(const void *data, int len, int step)
+void dotest(PMEMoid *pop, const void *data, int len, int step)
 {
     struct testctx t;
     LZ77 *lz;
@@ -731,6 +734,16 @@ void dotest(const void *data, int len, int step)
 		//printf("%c", lz->result[i]);
 	//size = sizeof();
 	printf("\nsize = %d\n", lz->resultlen);
+	TOID(struct my_root) root = POBJ_ROOT(pop, struct my_root);
+
+	TX_BEGIN(pop)
+	{
+		TX_MEMCPY(D_RW(root)->r, lz->result, strlen(lz->result));
+	} TX_END
+
+	pmemobj_close(pop);
+	lz77_free(lz);
+	printf("persist!");
 
     //assert(t.len == t.ptr);
     printf("\n");
@@ -743,50 +756,45 @@ int main(int argc, char **argv)
 	int i, len, truncate = 0;
 	int step;
     char *filename = NULL;
-<<<<<<< HEAD:lz77_1.0.c
-
-	LZ77 *lz;
-	step = 48000;		       /* big step by default */
-
-    // while (--argc) {
-	// char *p = *++argv;
-	// if (!strcmp(p, "-t")) {
-	//     truncate = 1;
-	// } else if (p[0] == '-' && p[1] == 'b') {
-	//     step = atoi(p+2);	       /* -bN sets block size to N */
-	// } else if (p[0] != '-') {
-	//     filename = p;
-	// }
-    // }
-	filename = argv[1];
-
-	if (filename) {
-=======
 	LZ77 *lz;
     step = 48000;		       /* big step by default */
 
-    while (--argc) {
-	char *p = *++argv;
-	if (!strcmp(p, "-t")) {
-	    truncate = 1;
-	} else if (p[0] == '-' && p[1] == 'b') {
-	    step = atoi(p+2);	       /* -bN sets block size to N */
-	} else if (p[0] != '-') {
-	    filename = p;
-	}
-    }
+    //while (--argc) {
+	//char *p = *++argv;
+	//if (!strcmp(p, "-t")) {
+	//    truncate = 1;
+	//} else if (p[0] == '-' && p[1] == 'b') {
+	//    step = atoi(p+2);	       /* -bN sets block size to N */
+	//} else if (p[0] != '-') {
+	//    filename = p;
+	//}
+    //}
+	filename = argv[2];
 
-    if (filename) {
-	
-	/* PMEM */
-	PMEMobjpool *pop = pmemobj_create(argv[1], POBJ_LAYOUT_NAME(rstore), MAXLEN, 0666);
+	PMEMobjpool *pop = pmemobj_create(argv[1], POBJ_LAYOUT_NAME(rstore), PMEMOBJ_MIN_POOL, 0666);
+
 	if(pop == NULL)
 	{
 		perror("pmemobj_create");
+			//printf("a");
 		return 1;
 	}
+    if (filename) {
+	
+	
+	//const char *path = argv[1];
 
->>>>>>> c6372c9b6792708cf331c45e448e21788f72999f:lz77_1.5.c
+//	if(file_exists(path) != 0)
+//	{
+
+//		printf("a");
+		/* PMEM */
+//	}
+//	else
+//	{
+//		printf("ok");
+//	}
+
 	char *data = NULL;
 	int datalen = 0, datasize = 0;
 	int c;
@@ -801,18 +809,9 @@ int main(int argc, char **argv)
 	}
 	
 	fclose(fp);
-	dotest(data, datalen, step);
+	dotest(pop, data, datalen, step);
 	printf("\nsize of raw data = %d\n", datasize);
 
-	TOID(struct my_root) root = POBJ_ROOT(pop, struct my_root);
-	
-	TX_BEGIN(pop)
-	{
-		TX_MEMCPY(D_RW(root)->r, lz->result, strlen(lz->result));
-	} TX_END
-
-	pmemobj_close(pop);
-	lz77_free(lz);	
 
     } else {
 	for(i = 0; i < lenof(tests); i++) 
@@ -820,13 +819,13 @@ int main(int argc, char **argv)
 	    for (len = (truncate ? 0 : strlen(tests[i]));
 		 len <= strlen(tests[i]); len++) 
 		{
-		dotest(tests[i], len, step);
+		dotest(pop, tests[i], len, step);
 		lz77_free(lz);
 		}
 	}
     }
 	clock_t end = clock();
 	double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-	printf("total time = %f\n", time_spent);
+	printf("total time : %f\n", time_spent);
 	return 0;
 }
