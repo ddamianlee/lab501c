@@ -13,11 +13,19 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <unistd.h>
 #include "zlib.h"
 #include <libpmemobj.h>
-#include "layout.h"
+#include <libpmem.h>
+//#include "layout.h"
+
 
 #if defined(MSDOS) || defined(OS2) || defined(WIN32) || defined(__CYGWIN__)
 #  include <fcntl.h>
@@ -29,13 +37,66 @@
 
 #define CHUNK 16384
 
+static void
+do_copy_to_pmem(char *pmemaddr, int fd, off_t len)
+{
+	char buf[CHUNK];
+	int cc;
+
+	/* copy the file, saving the last flush step to the end */
+	while ((cc = read(fd, buf, CHUNK)) > 0) {
+		pmem_memcpy_nodrain(pmemaddr, buf, cc);
+		pmemaddr += cc;
+	}
+
+	if (cc < 0) {
+		perror("read");
+		exit(1);
+	}
+
+	/* perform final flush step */
+	pmem_drain();
+}
+
+/*
+ * do_copy_to_non_pmem -- copy to a non-pmem memory mapped file
+ */
+static void
+do_copy_to_non_pmem(char *addr, int fd, off_t len)
+{
+	char *startaddr = addr;
+	char buf[CHUNK];
+	int cc;
+
+	/* copy the file, saving the last flush step to the end */
+	while ((cc = read(fd, buf, CHUNK)) > 0) {
+		memcpy(addr, buf, cc);
+		addr += cc;
+	}
+
+    if(cc == 0)
+    {
+        printf("read success\n");
+    }
+	if (cc == -1) {
+		perror("read");
+		exit(1);
+	}
+
+	/* flush it */
+	if (pmem_msync(startaddr, len) < 0) {
+		perror("pmem_msync");
+		exit(1);
+	}
+}
+
 /* Compress from file source to file dest until EOF on source.
    def() returns Z_OK on success, Z_MEM_ERROR if memory could not be
    allocated for processing, Z_STREAM_ERROR if an invalid compression
    level is supplied, Z_VERSION_ERROR if the version of zlib.h and the
    version of the library linked do not match, or Z_ERRNO if there is
    an error reading or writing the files. */
-int def(PMEMobjpool *pop, FILE *source, FILE *dest, int level)
+int def(char *outpath, FILE *source, FILE *dest, int level)
 {
     int ret, flush;
     unsigned have;
@@ -43,7 +104,12 @@ int def(PMEMobjpool *pop, FILE *source, FILE *dest, int level)
     unsigned char in[CHUNK];
     unsigned char out[CHUNK];
 
-    TOID(struct my_root) root = POBJ_ROOT(pop, struct my_root);
+    /* persistent parameter */
+    int fd;
+    char *pmemaddr;
+    int is_pmem;
+    size_t mapped_len;
+    int cc;
    
     /* allocate deflate state */
     strm.zalloc = Z_NULL;
@@ -72,10 +138,6 @@ int def(PMEMobjpool *pop, FILE *source, FILE *dest, int level)
             assert(ret != Z_STREAM_ERROR);  /* state not clobbered */
             have = CHUNK - strm.avail_out;
             if (fwrite(out, 1, have, dest) != have || ferror(dest)) {
-                TX_BEGIN(pop)
-                {
-                    TX_MEMCPY(D_RW(root)->r, out, strlen(out));
-                } TX_END
                 (void)deflateEnd(&strm);
                 return Z_ERRNO;
             }
@@ -88,7 +150,33 @@ int def(PMEMobjpool *pop, FILE *source, FILE *dest, int level)
 
     /* clean up and return */
     (void)deflateEnd(&strm);
-    pmemobj_close(pop);
+    
+    fd = fileno(dest);
+    struct stat buf;
+    if(fstat(fd, &buf) < 0)
+    {
+        perror("fstat");
+        exit(1);
+    }    
+    
+    if((pmemaddr = pmem_map_file(outpath, buf.st_size, PMEM_FILE_CREATE|PMEM_FILE_EXCL, 0666, &mapped_len, &is_pmem)) == NULL)
+    {
+        perror("pmem_map_file");
+        exit(1);
+    }
+    
+    /* determine if range is true pmem, call appropriate copy routine */
+	if (is_pmem)
+		do_copy_to_pmem(pmemaddr, fd, buf.st_size);
+	else
+		do_copy_to_non_pmem(pmemaddr, fd, buf.st_size);
+
+    close(fd);
+    pmem_unmap(pmemaddr, mapped_len);
+
+   
+    
+    //pmemobj_close(pop);
     return Z_OK;
     
 }
@@ -186,21 +274,21 @@ void zerr(int ret)
 int main(int argc, char **argv)
 {
     int ret;
-
     
+    char *outPath = argv[1];
     /* avoid end-of-line conversions */
     SET_BINARY_MODE(stdin);
     SET_BINARY_MODE(stdout);
 
     /* do compression if no arguments */
     if (argc == 2 && strcmp(argv[1], "-d") != 0) {
-        PMEMobjpool *pop = pmemobj_create(argv[1], POBJ_LAYOUT_NAME(rstore), PMEMOBJ_MIN_POOL, 0666);
-        if(pop == NULL)
-        {
-            perror("pmemobj_create");
-            return 1;
-        }
-        ret = def(pop, stdin, stdout, Z_DEFAULT_COMPRESSION);
+        //PMEMobjpool *pop = pmemobj_create(argv[1], POBJ_LAYOUT_NAME(rstore), PMEMOBJ_MIN_POOL, 0666);
+        // if(pop == NULL)
+        // {
+        //     perror("pmemobj_create");
+        //     return 1;
+        // }
+        ret = def(outPath, stdin, stdout, Z_DEFAULT_COMPRESSION);
         if (ret != Z_OK)
             zerr(ret);
         return ret;
