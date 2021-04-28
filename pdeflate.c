@@ -99,10 +99,6 @@ do_copy_to_non_pmem(char *addr, FILE *dest, off_t len)
 		memcpy(addr, buf, cc);
 		addr += cc;
 	}
-    if(cc == 0)
-    {
-        printf("read success\n");
-    }
 	if (cc == -1) {
 		perror("read");
 		exit(1);
@@ -216,10 +212,10 @@ int def(PMEMobjpool *pop, char *pmemfile, FILE *source, FILE *dest, int level)
     }
     
     /* determine if range is true pmem, call appropriate copy routine */
-	if (is_pmem)
+	//if (is_pmem)
 		do_copy_to_pmem(pmemaddr, dest, buf.st_size);
-	else
-		do_copy_to_non_pmem(pmemaddr, dest, buf.st_size);
+	//else
+		//do_copy_to_non_pmem(pmemaddr, dest, buf.st_size);
 
 
 
