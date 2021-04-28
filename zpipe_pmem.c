@@ -24,6 +24,7 @@
 #include "zlib.h"
 #include <libpmemobj.h>
 #include <libpmem.h>
+#include <time.h>
 //#include "layout.h"
 
 
@@ -50,7 +51,9 @@ do_copy_to_pmem(char *pmemaddr, int fd, off_t len)
 	}
 
 	if (cc < 0) {
-		perror("read");
+		pmem_drain();
+        printf("flush to pmem\n");
+        perror("read");
 		exit(1);
 	}
 
@@ -73,13 +76,20 @@ do_copy_to_non_pmem(char *addr, int fd, off_t len)
 		memcpy(addr, buf, cc);
 		addr += cc;
 	}
-
+    
+   
     if(cc == 0)
     {
         printf("read success\n");
     }
 	if (cc == -1) {
-		perror("read");
+		if (pmem_msync(startaddr, len) < 0) 
+        {
+		    perror("pmem_msync");
+		    exit(1);
+	    }
+        printf("flush to non pmem\n");
+        perror("read");
 		exit(1);
 	}
 
@@ -148,9 +158,9 @@ int def(char *outpath, FILE *source, FILE *dest, int level)
     } while (flush != Z_FINISH);
     assert(ret == Z_STREAM_END);        /* stream will be complete */
 
-    /* clean up and return */
-    (void)deflateEnd(&strm);
     
+    
+    fseek(dest, SEEK_SET, 0);
     fd = fileno(dest);
     struct stat buf;
     if(fstat(fd, &buf) < 0)
@@ -159,12 +169,13 @@ int def(char *outpath, FILE *source, FILE *dest, int level)
         exit(1);
     }    
     
+    /* pmem mmap a file */
     if((pmemaddr = pmem_map_file(outpath, buf.st_size, PMEM_FILE_CREATE|PMEM_FILE_EXCL, 0666, &mapped_len, &is_pmem)) == NULL)
     {
         perror("pmem_map_file");
         exit(1);
     }
-    
+
     /* determine if range is true pmem, call appropriate copy routine */
 	if (is_pmem)
 		do_copy_to_pmem(pmemaddr, fd, buf.st_size);
@@ -177,6 +188,9 @@ int def(char *outpath, FILE *source, FILE *dest, int level)
    
     
     //pmemobj_close(pop);
+    
+    /* clean up and return */
+    (void)deflateEnd(&strm);
     return Z_OK;
     
 }
@@ -273,6 +287,8 @@ void zerr(int ret)
 /* compress or decompress from stdin to stdout */
 int main(int argc, char **argv)
 {
+    time_t start, end;
+    start = time(NULL);
     int ret;
     
     char *outPath = argv[1];
@@ -291,7 +307,12 @@ int main(int argc, char **argv)
         ret = def(outPath, stdin, stdout, Z_DEFAULT_COMPRESSION);
         if (ret != Z_OK)
             zerr(ret);
+        
+        end = time(NULL);
+        double diff = difftime(end, start);
+        printf("time = %f\n", diff);
         return ret;
+
     }
 
     /* do decompression if -d specified */
@@ -307,4 +328,6 @@ int main(int argc, char **argv)
         fputs("zpipe usage: zpipe [-d] < source > dest\n", stderr);
         return 1;
     }
+
+   
 }
