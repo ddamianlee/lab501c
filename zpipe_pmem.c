@@ -39,13 +39,17 @@
 #define CHUNK 16384
 
 static void
-do_copy_to_pmem(char *pmemaddr, int fd, off_t len)
+do_copy_to_pmem(char *pmemaddr, FILE *dest/*int fd*/, off_t len)
 {
 	char buf[CHUNK];
 	int cc;
 
 	/* copy the file, saving the last flush step to the end */
-	while ((cc = read(fd, buf, CHUNK)) > 0) {
+	// while ((cc = read(fd, buf, CHUNK)) > 0) {
+	// 	pmem_memcpy_nodrain(pmemaddr, buf, cc);
+	// 	pmemaddr += cc;
+	// }
+    while ((cc = fread(buf, CHUNK, 1, dest)) > 0) {
 		pmem_memcpy_nodrain(pmemaddr, buf, cc);
 		pmemaddr += cc;
 	}
@@ -59,36 +63,30 @@ do_copy_to_pmem(char *pmemaddr, int fd, off_t len)
 
 	/* perform final flush step */
 	pmem_drain();
+    printf("flush to pmem!\n");
 }
 
 /*
  * do_copy_to_non_pmem -- copy to a non-pmem memory mapped file
  */
 static void
-do_copy_to_non_pmem(char *addr, int fd, off_t len)
+do_copy_to_non_pmem(char *addr, FILE *dest/*int fd*/, off_t len)
 {
 	char *startaddr = addr;
 	char buf[CHUNK];
 	int cc;
-
-	/* copy the file, saving the last flush step to the end */
-	while ((cc = read(fd, buf, CHUNK)) > 0) {
+	
+    /* copy the file, saving the last flush step to the end */
+	// while ((cc = read(fd, buf, CHUNK)) > 0) {
+	// 	memcpy(addr, buf, cc);
+	// 	addr += cc;
+	// }
+    while ((cc = fread(buf, CHUNK, 1, dest)) > 0) {
 		memcpy(addr, buf, cc);
 		addr += cc;
 	}
     
-   
-    if(cc == 0)
-    {
-        printf("read success\n");
-    }
 	if (cc == -1) {
-		if (pmem_msync(startaddr, len) < 0) 
-        {
-		    perror("pmem_msync");
-		    exit(1);
-	    }
-        printf("flush to non pmem\n");
         perror("read");
 		exit(1);
 	}
@@ -98,6 +96,8 @@ do_copy_to_non_pmem(char *addr, int fd, off_t len)
 		perror("pmem_msync");
 		exit(1);
 	}
+
+    printf("flush to non pmem!\n");
 }
 
 /* Compress from file source to file dest until EOF on source.
@@ -106,7 +106,7 @@ do_copy_to_non_pmem(char *addr, int fd, off_t len)
    level is supplied, Z_VERSION_ERROR if the version of zlib.h and the
    version of the library linked do not match, or Z_ERRNO if there is
    an error reading or writing the files. */
-int def(char *outpath, FILE *source, FILE *dest, int level)
+int def(char *pmemfile, FILE *source, FILE *dest, int level)
 {
     int ret, flush;
     unsigned have;
@@ -170,7 +170,7 @@ int def(char *outpath, FILE *source, FILE *dest, int level)
     }    
     
     /* pmem mmap a file */
-    if((pmemaddr = pmem_map_file(outpath, buf.st_size, PMEM_FILE_CREATE|PMEM_FILE_EXCL, 0666, &mapped_len, &is_pmem)) == NULL)
+    if((pmemaddr = pmem_map_file(pmemfile, buf.st_size, PMEM_FILE_CREATE|PMEM_FILE_EXCL, 0666, &mapped_len, &is_pmem)) == NULL)
     {
         perror("pmem_map_file");
         exit(1);
@@ -178,9 +178,9 @@ int def(char *outpath, FILE *source, FILE *dest, int level)
 
     /* determine if range is true pmem, call appropriate copy routine */
 	if (is_pmem)
-		do_copy_to_pmem(pmemaddr, fd, buf.st_size);
+		do_copy_to_pmem(pmemaddr, dest, buf.st_size);
 	else
-		do_copy_to_non_pmem(pmemaddr, fd, buf.st_size);
+		do_copy_to_non_pmem(pmemaddr, dest, buf.st_size);
 
     close(fd);
     pmem_unmap(pmemaddr, mapped_len);
@@ -188,7 +188,7 @@ int def(char *outpath, FILE *source, FILE *dest, int level)
    
     
     //pmemobj_close(pop);
-    
+
     /* clean up and return */
     (void)deflateEnd(&strm);
     return Z_OK;
@@ -288,28 +288,30 @@ void zerr(int ret)
 int main(int argc, char **argv)
 {
     time_t start, end;
-    start = time(NULL);
+    start = clock();
     int ret;
     
-    char *outPath = argv[1];
+    FILE *fpIn = fopen(argv[1], "rb+");
+    FILE *fpOut = fopen(argv[2], "wb+");
+    char *pmemfile = argv[3];
     /* avoid end-of-line conversions */
-    SET_BINARY_MODE(stdin);
-    SET_BINARY_MODE(stdout);
+    //SET_BINARY_MODE(stdin);
+    //SET_BINARY_MODE(stdout);
 
     /* do compression if no arguments */
-    if (argc == 2 && strcmp(argv[1], "-d") != 0) {
+    if (argc == 4 && strcmp(argv[1], "-d") != 0) {
         //PMEMobjpool *pop = pmemobj_create(argv[1], POBJ_LAYOUT_NAME(rstore), PMEMOBJ_MIN_POOL, 0666);
         // if(pop == NULL)
         // {
         //     perror("pmemobj_create");
         //     return 1;
         // }
-        ret = def(outPath, stdin, stdout, Z_DEFAULT_COMPRESSION);
+        ret = def(pmemfile, fpIn, fpOut, Z_DEFAULT_COMPRESSION);
         if (ret != Z_OK)
             zerr(ret);
         
-        end = time(NULL);
-        double diff = difftime(end, start);
+        end = clock();
+        double diff = ((double) (end - start)) / CLOCKS_PER_SEC;
         printf("time = %f\n", diff);
         return ret;
 
