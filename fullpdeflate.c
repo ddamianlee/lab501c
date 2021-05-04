@@ -311,7 +311,8 @@ int main(int argc, char **argv)
     int is_pmem;
     size_t mapped_len;
     int cc;
-   
+    char *pmemfile = argv[2];
+
     
     int srcfd = open(argv[1], O_RDONLY);
     struct stat buf;
@@ -320,13 +321,12 @@ int main(int argc, char **argv)
         perror("fstat");
         exit(1);
     }    
-    if((pmemaddr = pmem_map_file(argv[2], buf.st_size, PMEM_FILE_CREATE|PMEM_FILE_EXCL, 0666, &mapped_len, &is_pmem)) == NULL)
+    if((pmemaddr = pmem_map_file(pmemfile, buf.st_size, PMEM_FILE_CREATE|PMEM_FILE_EXCL, 0666, &mapped_len, &is_pmem)) == NULL)
     {
         perror("pmem_map_file");
         exit(1);
     }
 
-    //char *pmemfile = argv[2];
  
 
     PMEMobjpool *pop = pmemobj_create(argv[3], POBJ_LAYOUT_NAME(test), PMEMOBJ_MIN_POOL, 0666);
