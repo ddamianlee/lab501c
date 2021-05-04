@@ -212,10 +212,10 @@ int def(PMEMobjpool *pop, char *pmemfile, FILE *source, FILE *dest, int level)
     }
     
     /* determine if range is true pmem, call appropriate copy routine */
-	//if (is_pmem)
+	if (is_pmem)
 		do_copy_to_pmem(pmemaddr, dest, buf.st_size);
-	//else
-		//do_copy_to_non_pmem(pmemaddr, dest, buf.st_size);
+	else
+		do_copy_to_non_pmem(pmemaddr, dest, buf.st_size);
 
 
 
@@ -316,7 +316,7 @@ void zerr(int ret)
     }
 }
 
-/* compress or decompress from stdin to stdout */
+/* compress or decompress */
 int main(int argc, char **argv)
 {
     time_t start, end;
@@ -336,6 +336,7 @@ int main(int argc, char **argv)
         perror("pmemobj_create");
         return 1;
     }
+    
     /* do compression if arguments = 3 */
     if (argc == 5 && pop != NULL)
     {
@@ -345,15 +346,6 @@ int main(int argc, char **argv)
         return ret;
 
     }
-
-    /* do compression if no arguments */
-    // if (argc == 2 && strcmp(argv[1], "-d") != 0) {
-        
-    //     ret = def(outPfile, stdin, stdout, Z_DEFAULT_COMPRESSION);
-    //     if (ret != Z_OK)
-    //         zerr(ret);
-    //     return ret;
-    // }
 
     /* do decompression if -d specified */
     else if (argc == 2 && strcmp(argv[1], "-d") == 0) {
@@ -365,7 +357,7 @@ int main(int argc, char **argv)
 
     /* otherwise, report usage */
     else {
-        fputs("zpipe usage: zpipe [-d] < source > dest\n", stderr);
+        fputs("pdeflate usage: pdeflate [-d] srcfile outfile pmemfile mempool\n", stderr);
         return 1;
     }
 }
