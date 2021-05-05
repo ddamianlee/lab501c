@@ -123,14 +123,15 @@ int def(PMEMobjpool *pop, int srcfd, char *pmemfile, int level)
 {
     int ret, flush;
     z_stream strm;
+    int fd;
+    FILE *fp;
+    fp = tmpfile();
     /* pmem file parameters */
     char *pmemaddr;
     int is_pmem;
     size_t mapped_len;
     int cc;
-    int fd;
-    FILE *fp;
-    fp = tmpfile();
+    
     
     /* allocate deflate state */
     strm.zalloc = Z_NULL;
@@ -195,7 +196,7 @@ int def(PMEMobjpool *pop, int srcfd, char *pmemfile, int level)
         D_RW(root)->io = TOID_NULL(struct InOutbuffer);
     } TX_END
 
- 
+    /* turn the temp file to file discriptor and get the size */
     fseek(fp, SEEK_SET, 0);
     fd = fileno(fp);
     struct stat buf;
@@ -210,22 +211,16 @@ int def(PMEMobjpool *pop, int srcfd, char *pmemfile, int level)
         exit(1);
     }
 
- 
-    
-    
-    
     /* determine if range is true pmem, call appropriate copy routine */
 	if (is_pmem)
 	    do_copy_to_pmem(pmemaddr, fp, buf.st_size);
 	else
 	 	do_copy_to_non_pmem(pmemaddr, fp, buf.st_size);
 
- 
-
-
     pmem_unmap(pmemaddr, mapped_len);
     fclose(fp);
     pmemobj_close(pop);
+    close(srcfd);
     return Z_OK;
     
 }
@@ -236,14 +231,16 @@ int def(PMEMobjpool *pop, int srcfd, char *pmemfile, int level)
    invalid or incomplete, Z_VERSION_ERROR if the version of zlib.h and
    the version of the library linked do not match, or Z_ERRNO if there
    is an error reading or writing the files. */
-int inf(FILE *source, FILE *dest)
+int inf(PMEMobjpool *pop, int srcfd, char *pmemfile)
 {
     int ret;
-    unsigned have;
     z_stream strm;
-    unsigned char in[CHUNK];
-    unsigned char out[CHUNK];
-
+    int fd;
+    FILE *fp;
+    fp = tmpfile();
+    char *pmemaddr;
+    int is_pmem;
+    size_t mapped_len;
     /* allocate inflate state */
     strm.zalloc = Z_NULL;
     strm.zfree = Z_NULL;
@@ -255,20 +252,26 @@ int inf(FILE *source, FILE *dest)
         return ret;
 
     /* decompress until deflate stream ends or end of file */
-    do {
-        strm.avail_in = fread(in, 1, CHUNK, source);
-        if (ferror(source)) {
+    /* set the root */
+    TOID(struct myroot) root = POBJ_ROOT(pop, struct myroot);
+    TX_BEGIN(pop)
+    {
+        TX_ADD(root);
+        TOID(struct InOutbuffer) io = TX_NEW(struct InOutbuffer);
+        do {
+        strm.avail_in = read(srcfd, D_RW(io)->in, CHUNK);
+        if (strm.avail_in == 1) {
             (void)inflateEnd(&strm);
             return Z_ERRNO;
         }
         if (strm.avail_in == 0)
             break;
-        strm.next_in = in;
+        strm.next_in = D_RW(io)->in;
 
         /* run inflate() on input until output buffer not full */
         do {
             strm.avail_out = CHUNK;
-            strm.next_out = out;
+            strm.next_out = D_RO(io)->out;
             ret = inflate(&strm, Z_NO_FLUSH);
             assert(ret != Z_STREAM_ERROR);  /* state not clobbered */
             switch (ret) {
@@ -279,8 +282,8 @@ int inf(FILE *source, FILE *dest)
                 (void)inflateEnd(&strm);
                 return ret;
             }
-            have = CHUNK - strm.avail_out;
-            if (fwrite(out, 1, have, dest) != have || ferror(dest)) {
+            D_RW(io)->have = CHUNK - strm.avail_out;
+            if (fwrite(D_RO(io)->out, 1, D_RO(io)->have, fp) != D_RO(io)->have) {
                 (void)inflateEnd(&strm);
                 return Z_ERRNO;
             }
@@ -288,9 +291,42 @@ int inf(FILE *source, FILE *dest)
 
         /* done when inflate() says it's done */
     } while (ret != Z_STREAM_END);
+    } TX_END
+    
+    TX_BEGIN(pop)
+    {
+        TX_ADD(root);
+        TX_FREE(D_RW(root)->io);
+        D_RW(root)->io = TOID_NULL(struct InOutbuffer);
+    } TX_END
+    
+     /* turn the temp file to file discriptor and get the size */   
+    fseek(fp, SEEK_SET, 0);
+    fd = fileno(fp);
+    struct stat buf;
+    if(fstat(fd, &buf) < 0)
+    {
+        perror("fstat");
+        exit(1);
+    }    
+    if((pmemaddr = pmem_map_file(pmemfile, buf.st_size, PMEM_FILE_CREATE|PMEM_FILE_EXCL, 0666, &mapped_len, &is_pmem)) == NULL)
+    {
+        perror("pmem_map_file");
+        exit(1);
+    }
+    
+    /* determine if range is true pmem, call appropriate copy routine */
+	if (is_pmem)
+	    do_copy_to_pmem(pmemaddr, fp, buf.st_size);
+	else
+	 	do_copy_to_non_pmem(pmemaddr, fp, buf.st_size);
 
+    pmem_unmap(pmemaddr, mapped_len);
+    fclose(fp);
+    pmemobj_close(pop);
     /* clean up and return */
     (void)inflateEnd(&strm);
+    close(srcfd);
     return ret == Z_STREAM_END ? Z_OK : Z_DATA_ERROR;
 }
 
@@ -325,9 +361,9 @@ int main(int argc, char **argv)
     time_t start, end;
     start = clock();
     int ret;
-    
-    char *pmemfile = argv[2];
+
     int srcfd = open(argv[1], O_RDONLY);
+    char *pmemfile = argv[2];
    
 
     PMEMobjpool *pop = pmemobj_create(argv[3], POBJ_LAYOUT_NAME(test), PMEMOBJ_MIN_POOL, 0666);
@@ -338,21 +374,19 @@ int main(int argc, char **argv)
     }
     
     
-    /* do compression if arguments = 3 */
+    /* do compression if arguments = 4 */
     if (argc == 4 && pop != NULL)
     {
         ret = def(pop, srcfd, pmemfile, Z_DEFAULT_COMPRESSION);
         if (ret != Z_OK)
             zerr(ret);
-        close(srcfd);
-        
         return ret;
 
     }
 
     /* do decompression if -d specified */
-    else if (argc == 2 && strcmp(argv[1], "-d") == 0) {
-        ret = inf(stdin, stdout);
+    else if (argc == 5 && strcmp(argv[1], "-d") == 0) {
+        ret = inf(pop, srcfd, pmemfile);
         if (ret != Z_OK)
             zerr(ret);
         return ret;
