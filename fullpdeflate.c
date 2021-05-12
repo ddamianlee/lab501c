@@ -120,9 +120,10 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
     /* pmem file parameters */
     char *src_pmemaddr;         /* src file pointer */
     char *pmemaddr;             /* output file pointer */
-    int is_pmem;
+    int is_pmem;                /* pmem_map_file arguments */
     size_t mapped_len;
-    int i, cc, maplen;
+    int i;
+    size_t maplen;
     
     /* map the src pmem file */
     if((src_pmemaddr = pmem_map_file(src, 0, PMEM_FILE_EXCL, 0666, &mapped_len, &is_pmem)) == NULL)
@@ -149,10 +150,10 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
     {
         TX_ADD(root);
         TOID(struct InOutbuffer) io = TX_NEW(struct InOutbuffer);
+        
         /* compress until end of file */
         do 
         {
-            //strm.avail_in = read(srcfd, D_RW(io)->in, CHUNK);
             int input_len = 0;          /* input file length counter */
             if(maplen > 0)
             {
@@ -171,11 +172,6 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
                 }    
             }
             strm.avail_in = input_len;
-            // if (strm.avail_in == 1) 
-            // {
-            //     (void)deflateEnd(&strm);
-            //     return Z_ERRNO;
-            // }
             flush = (strm.avail_in == 0) ? Z_FINISH : Z_NO_FLUSH;
             strm.next_in = D_RO(io)->in;
 
@@ -200,7 +196,7 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
         /* done when last data in file processed */
         } while (flush != Z_FINISH);
         assert(ret == Z_STREAM_END);        /* stream will be complete */
-        //pmem_drain();
+
         /* clean up and return */
         (void)deflateEnd(&strm);
     } TX_END
@@ -222,13 +218,13 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
         exit(1);
     }    
     
-    
+    /* map the output file to pmem */
     if((pmemaddr = pmem_map_file(pmemfile, buf.st_size, PMEM_FILE_CREATE|PMEM_FILE_EXCL, 0666, &mapped_len, &is_pmem)) == NULL)
     {
         perror("pmem_map_file");
         exit(1);
     }
-    printf("is_pmem = %d\n", is_pmem);
+    printf("is_pmem = %d\n", is_pmem);  /* check is_pmem is 0 or 1 */
 
     /* determine if range is true pmem, call appropriate copy routine */
 	if (is_pmem)
@@ -379,10 +375,6 @@ int main(int argc, char **argv)
     time_t start, end;
     start = clock();
     int ret;
-    int is_pmem;                /* pmem_map_file arguments */
-    size_t mapped_len;
-    
-    //int srcfd = open(argv[1], O_RDONLY);
     char *outfile = argv[2];    /* output file path */   
 
     /* create a memory pool */
@@ -392,11 +384,6 @@ int main(int argc, char **argv)
         perror("pmemobj_create");
         return 1;
     }
-    
-    
-    
-   
-
     
     /* do compression if arguments = 4 */
     if (argc == 4 && pop != NULL)
