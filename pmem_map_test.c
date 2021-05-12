@@ -25,8 +25,8 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    printf("is_pmem = %d", is_pmem);
-    printf("size = %ld", mapped_len);
+    printf("is_pmem = %d\n", is_pmem);
+    printf("size = %ld\n", mapped_len);
     
     for(i = 0; i < CHUNK; i++)
     {
@@ -41,5 +41,6 @@ int main(int argc, char **argv)
     }
     
     pmem_unmap(pmemaddr, mapped_len);
+    printf("\n");
     return 0;
 }
