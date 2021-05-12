@@ -122,7 +122,7 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
     char *pmemaddr;             /* output file pointer */
     int is_pmem;
     size_t mapped_len;
-    int i, cc;
+    int i, cc, maplen;
     
     /* map the src pmem file */
     if((src_pmemaddr = pmem_map_file(src, 0, PMEM_FILE_EXCL, 0666, &mapped_len, &is_pmem)) == NULL)
@@ -130,6 +130,7 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
         perror("pmem_map_file");
         exit(1);
     }
+    maplen = mapped_len;
 
     /* allocate deflate state */
     strm.zalloc = Z_NULL;
@@ -155,17 +156,18 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
             //     D_RW(io)->in[i] = src_pmemaddr[i];
             
             int input_len = 0;          /* input file length counter */
-            while(mapped_len > 0)
+            if(maplen > 0)
             {
-                if(mapped_len < CHUNK)
+                if(maplen < CHUNK)
                 {
-                    strncpy(D_RW(io)->in, src_pmemaddr, mapped_len);
-                    input_len = mapped_len;
+                    strncpy(D_RW(io)->in, src_pmemaddr, maplen);
+                    input_len = maplen;
+                    maplen = 0;
                 }
                 else
                 {
                     strncpy(D_RW(io)->in, src_pmemaddr, CHUNK);
-                    mapped_len -= CHUNK;
+                    maplen -= CHUNK;
                     input_len = CHUNK;
                     src_pmemaddr += CHUNK;
                 }    
@@ -177,14 +179,14 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
             //     return Z_ERRNO;
             // }
             flush = (strm.avail_in == 0) ? Z_FINISH : Z_NO_FLUSH;
-            strm.next_in = &D_RO(io)->in;
+            strm.next_in = D_RO(io)->in;
 
             /* run deflate() on input until output buffer not full, finish
             compression if all of source has been read in */
             do 
             {
                 strm.avail_out = CHUNK;
-                strm.next_out = &D_RO(io)->out;
+                strm.next_out = D_RO(io)->out;
                 ret = deflate(&strm, flush);    /* no bad return value */
                 assert(ret != Z_STREAM_ERROR);  /* state not clobbered */
                 D_RW(io)->have = CHUNK - strm.avail_out;
