@@ -4,12 +4,14 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <time.h>
 
-#define CHUNK 16384
-
+#define CHUNK 2097152
 
 int main(int argc, char **argv)
 {
+    time_t start, end;
+    start = clock();
     unsigned char *f;
     unsigned char buffer[CHUNK];
     int i;
@@ -30,13 +32,17 @@ int main(int argc, char **argv)
         buffer[i] = f[i];
         printf("%c", buffer[i]);
     }
-    f += CHUNK;
-    for(i = 0; i < CHUNK; i++)
-    {
-        buffer[i] = f[i];
-        printf("%c", buffer[i]);
-    }
+    // f += CHUNK;
+    // for(i = 0; i < CHUNK; i++)
+    // {
+    //     buffer[i] = f[i];
+    //     printf("%c", buffer[i]);
+    // }
     munmap(f, size);
     close(fd);
+    end = clock();
+    double diff = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("time = %f\n", diff);
+
     return 0;
 }

@@ -5,14 +5,18 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <time.h>
 #include <libpmem.h>
 #include <libpmemobj.h>
 
-#define CHUNK 16384
+#define CHUNK 2097152
 
 
 int main(int argc, char **argv)
 {
+    time_t start, end;
+    start = clock();
+
     char *pmemaddr;
     size_t mapped_len;
     int is_pmem;
@@ -33,14 +37,19 @@ int main(int argc, char **argv)
         buffer[i] = pmemaddr[i];
         printf("%c", buffer[i]);
     }
-    pmemaddr += CHUNK;
-    for(i = 0; i < CHUNK; i++)
-    {
-        buffer[i] = pmemaddr[i];
-        printf("%c", buffer[i]);
-    }
+    // pmemaddr += CHUNK;
+    // for(i = 0; i < CHUNK; i++)
+    // {
+    //     buffer[i] = pmemaddr[i];
+    //     printf("%c", buffer[i]);
+    // }
     
     pmem_unmap(pmemaddr, mapped_len);
     printf("\n");
+
+    end = clock();
+    double diff = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("time = %f\n", diff);
+
     return 0;
 }
