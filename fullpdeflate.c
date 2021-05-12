@@ -130,6 +130,7 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
         perror("pmem_map_file");
         exit(1);
     }
+    printf("is_pmem = %d\n", is_pmem);
     maplen = mapped_len;
 
     /* allocate deflate state */
@@ -147,14 +148,11 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
     TX_BEGIN(pop)
     {
         TX_ADD(root);
-        TOID(struct InOutbuffer) io = TX_ZNEW(struct InOutbuffer);
+        TOID(struct InOutbuffer) io = TX_NEW(struct InOutbuffer);
         /* compress until end of file */
         do 
         {
             //strm.avail_in = read(srcfd, D_RW(io)->in, CHUNK);
-            // for(i = 0; i < CHUNK || input_len < mapped_len; i++)
-            //     D_RW(io)->in[i] = src_pmemaddr[i];
-            
             int input_len = 0;          /* input file length counter */
             if(maplen > 0)
             {
@@ -230,6 +228,7 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
         perror("pmem_map_file");
         exit(1);
     }
+    printf("is_pmem = %d\n", is_pmem);
 
     /* determine if range is true pmem, call appropriate copy routine */
 	if (is_pmem)
@@ -387,7 +386,7 @@ int main(int argc, char **argv)
     char *outfile = argv[2];    /* output file path */   
 
     /* create a memory pool */
-    PMEMobjpool *pop = pmemobj_create(argv[3], POBJ_LAYOUT_NAME(pmem_deflate), PMEMOBJ_MIN_POOL, 0666);
+    PMEMobjpool *pop = pmemobj_create(argv[3], POBJ_LAYOUT_NAME(pmem_deflate), 3221225472, 0666);
     if (pop == NULL)
     {
         perror("pmemobj_create");
