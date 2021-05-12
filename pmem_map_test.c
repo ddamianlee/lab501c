@@ -35,7 +35,7 @@ int main(int argc, char **argv)
     for(i = 0; i < CHUNK; i++)
     {
         buffer[i] = pmemaddr[i];
-        printf("%c", buffer[i]);
+       // printf("%c", buffer[i]);
     }
     // pmemaddr += CHUNK;
     // for(i = 0; i < CHUNK; i++)
