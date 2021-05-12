@@ -1,17 +1,3 @@
-/* zpipe.c: example of proper use of zlib's inflate() and deflate()
-   Not copyrighted -- provided to the public domain
-   Version 1.4  11 December 2005  Mark Adler */
-
-/* Version history:
-   1.0  30 Oct 2004  First version
-   1.1   8 Nov 2004  Add void casting for unused return values
-                     Use switch statement for inflate() return values
-   1.2   9 Nov 2004  Add assertions to document zlib guarantees
-   1.3   6 Apr 2005  Remove incorrect assertion in inf()
-   1.4  11 Dec 2005  Add hack to avoid MSDOS end-of-line conversions
-                     Avoid some compiler warnings for input and output buffers
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,12 +12,15 @@
 #include <libpmem.h>
 //#include "layout.h"
 
-POBJ_LAYOUT_BEGIN(test);
-POBJ_LAYOUT_ROOT(test, struct myroot);
-//POBJ_LAYOUT_TOID(test, struct z_stream_s);
-//POBJ_LAYOUT_TOID(test, struct internal_state);
-POBJ_LAYOUT_TOID(test, struct InOutbuffer);
-POBJ_LAYOUT_END(test);
+POBJ_LAYOUT_BEGIN(pmem_deflate);
+POBJ_LAYOUT_ROOT(pmem_deflate, struct myroot);
+POBJ_LAYOUT_TOID(pmem_deflate, struct z_stream_s);
+POBJ_LAYOUT_TOID(pmem_deflate, struct internal_state);
+POBJ_LAYOUT_TOID(pmem_deflate, struct InOutbuffer);
+POBJ_LAYOUT_TOID(pmem_deflate, struct static_tree_desc_s);
+POBJ_LAYOUT_TOID(pmem_deflate, struct tree_desc_s);
+POBJ_LAYOUT_TOID(pmem_deflate, struct ct_data_s);
+POBJ_LAYOUT_END(pmem_deflate);
 
 
 #if defined(MSDOS) || defined(OS2) || defined(WIN32) || defined(__CYGWIN__)
@@ -49,15 +38,17 @@ POBJ_LAYOUT_END(test);
  */
 struct myroot
 {
-    //TOID(struct z_stream_s) z_stream_s;
-    //TOID(struct internal_state) internal_state;
+    TOID(struct z_stream_s) z_stream_s;
+    TOID(struct internal_state) internal_state;
     TOID(struct InOutbuffer) io;
+    TOID(struct static_tree_desc_s) static_tree_desc;
+
 };
 
 struct InOutbuffer
 {   
-    char in[CHUNK];
-    char out[CHUNK];
+    unsigned char in[CHUNK];
+    unsigned char out[CHUNK];
     unsigned have;
 };
 
@@ -119,20 +110,27 @@ do_copy_to_non_pmem(char *addr, FILE *fp, off_t len)
    level is supplied, Z_VERSION_ERROR if the version of zlib.h and the
    version of the library linked do not match, or Z_ERRNO if there is
    an error reading or writing the files. */
-int def(PMEMobjpool *pop, int srcfd, char *pmemfile, int level)
+int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
 {
     int ret, flush;
     z_stream strm;
-    int fd;
-    FILE *fp;
+    int fd;                     /* temporary file discriptor */
+    FILE *fp;                   /* temporary file pointer */
     fp = tmpfile();
     /* pmem file parameters */
-    char *pmemaddr;
+    char *src_pmemaddr;         /* src file pointer */
+    char *pmemaddr;             /* output file pointer */
     int is_pmem;
     size_t mapped_len;
-    int cc;
+    int i, cc;
     
-    
+    /* map the src pmem file */
+    if((src_pmemaddr = pmem_map_file(src, 0, PMEM_FILE_EXCL, 0666, &mapped_len, &is_pmem)) == NULL)
+    {
+        perror("pmem_map_file");
+        exit(1);
+    }
+
     /* allocate deflate state */
     strm.zalloc = Z_NULL;
     strm.zfree = Z_NULL;
@@ -148,38 +146,56 @@ int def(PMEMobjpool *pop, int srcfd, char *pmemfile, int level)
     TX_BEGIN(pop)
     {
         TX_ADD(root);
-        TOID(struct InOutbuffer) io = TX_NEW(struct InOutbuffer);
+        TOID(struct InOutbuffer) io = TX_ZNEW(struct InOutbuffer);
         /* compress until end of file */
         do 
         {
-            strm.avail_in = read(srcfd, D_RW(io)->in, CHUNK);
-            if (strm.avail_in == 1) 
+            //strm.avail_in = read(srcfd, D_RW(io)->in, CHUNK);
+            // for(i = 0; i < CHUNK || input_len < mapped_len; i++)
+            //     D_RW(io)->in[i] = src_pmemaddr[i];
+            
+            int input_len = 0;          /* input file length counter */
+            while(mapped_len > 0)
             {
-                (void)deflateEnd(&strm);
-                return Z_ERRNO;
+                if(mapped_len < CHUNK)
+                {
+                    strncpy(D_RW(io)->in, src_pmemaddr, mapped_len);
+                    input_len = mapped_len;
+                }
+                else
+                {
+                    strncpy(D_RW(io)->in, src_pmemaddr, CHUNK);
+                    mapped_len -= CHUNK;
+                    input_len = CHUNK;
+                    src_pmemaddr += CHUNK;
+                }    
             }
+            strm.avail_in = input_len;
+            // if (strm.avail_in == 1) 
+            // {
+            //     (void)deflateEnd(&strm);
+            //     return Z_ERRNO;
+            // }
             flush = (strm.avail_in == 0) ? Z_FINISH : Z_NO_FLUSH;
-            strm.next_in = D_RO(io)->in;
+            strm.next_in = &D_RO(io)->in;
 
             /* run deflate() on input until output buffer not full, finish
             compression if all of source has been read in */
-        do 
-        {
-            strm.avail_out = CHUNK;
-            strm.next_out = D_RO(io)->out;
-            ret = deflate(&strm, flush);    /* no bad return value */
-            assert(ret != Z_STREAM_ERROR);  /* state not clobbered */
-            D_RW(io)->have = CHUNK - strm.avail_out;
-            if (fwrite(D_RO(io)->out, 1, D_RO(io)->have, fp) != D_RO(io)->have) 
+            do 
             {
-                (void)deflateEnd(&strm);
-                return Z_ERRNO;
-            }
-            //pmem_memcpy_nodrain(pmemaddr, D_RO(io)->out, D_RO(io)->have);
-		    // pmemaddr += D_RO(io)->have;
-            
-        } while (strm.avail_out == 0);
-        assert(strm.avail_in == 0);     /* all input will be used */
+                strm.avail_out = CHUNK;
+                strm.next_out = &D_RO(io)->out;
+                ret = deflate(&strm, flush);    /* no bad return value */
+                assert(ret != Z_STREAM_ERROR);  /* state not clobbered */
+                D_RW(io)->have = CHUNK - strm.avail_out;
+                if (fwrite(D_RO(io)->out, 1, D_RO(io)->have, fp) != D_RO(io)->have) 
+                {
+                    (void)deflateEnd(&strm);
+                    return Z_ERRNO;
+                }
+                
+            } while (strm.avail_out == 0);
+            assert(strm.avail_in == 0);     /* all input will be used */
 
         /* done when last data in file processed */
         } while (flush != Z_FINISH);
@@ -205,6 +221,8 @@ int def(PMEMobjpool *pop, int srcfd, char *pmemfile, int level)
         perror("fstat");
         exit(1);
     }    
+    
+    
     if((pmemaddr = pmem_map_file(pmemfile, buf.st_size, PMEM_FILE_CREATE|PMEM_FILE_EXCL, 0666, &mapped_len, &is_pmem)) == NULL)
     {
         perror("pmem_map_file");
@@ -220,7 +238,6 @@ int def(PMEMobjpool *pop, int srcfd, char *pmemfile, int level)
     pmem_unmap(pmemaddr, mapped_len);
     fclose(fp);
     pmemobj_close(pop);
-    close(srcfd);
     return Z_OK;
     
 }
@@ -231,7 +248,7 @@ int def(PMEMobjpool *pop, int srcfd, char *pmemfile, int level)
    invalid or incomplete, Z_VERSION_ERROR if the version of zlib.h and
    the version of the library linked do not match, or Z_ERRNO if there
    is an error reading or writing the files. */
-int inf(PMEMobjpool *pop, int srcfd, char *pmemfile)
+int inf(PMEMobjpool *pop, char *src, char *pmemfile)
 {
     int ret;
     z_stream strm;
@@ -259,7 +276,7 @@ int inf(PMEMobjpool *pop, int srcfd, char *pmemfile)
         TX_ADD(root);
         TOID(struct InOutbuffer) io = TX_NEW(struct InOutbuffer);
         do {
-        strm.avail_in = read(srcfd, D_RW(io)->in, CHUNK);
+        //strm.avail_in = read(srcfd, D_RW(io)->in, CHUNK);
         if (strm.avail_in == 1) {
             (void)inflateEnd(&strm);
             return Z_ERRNO;
@@ -326,14 +343,14 @@ int inf(PMEMobjpool *pop, int srcfd, char *pmemfile)
     pmemobj_close(pop);
     /* clean up and return */
     (void)inflateEnd(&strm);
-    close(srcfd);
+    //close(srcfd);
     return ret == Z_STREAM_END ? Z_OK : Z_DATA_ERROR;
 }
 
 /* report a zlib or i/o error */
 void zerr(int ret)
 {
-    fputs("zpipe: ", stderr);
+    fputs("pdeflate: ", stderr);
     switch (ret) {
     case Z_ERRNO:
         if (ferror(stdin))
@@ -361,12 +378,14 @@ int main(int argc, char **argv)
     time_t start, end;
     start = clock();
     int ret;
+    int is_pmem;                /* pmem_map_file arguments */
+    size_t mapped_len;
+    
+    //int srcfd = open(argv[1], O_RDONLY);
+    char *outfile = argv[2];    /* output file path */   
 
-    int srcfd = open(argv[1], O_RDONLY);
-    char *pmemfile = argv[2];
-   
-
-    PMEMobjpool *pop = pmemobj_create(argv[3], POBJ_LAYOUT_NAME(test), PMEMOBJ_MIN_POOL, 0666);
+    /* create a memory pool */
+    PMEMobjpool *pop = pmemobj_create(argv[3], POBJ_LAYOUT_NAME(pmem_deflate), PMEMOBJ_MIN_POOL, 0666);
     if (pop == NULL)
     {
         perror("pmemobj_create");
@@ -374,10 +393,14 @@ int main(int argc, char **argv)
     }
     
     
+    
+   
+
+    
     /* do compression if arguments = 4 */
     if (argc == 4 && pop != NULL)
     {
-        ret = def(pop, srcfd, pmemfile, Z_DEFAULT_COMPRESSION);
+        ret = def(pop, argv[1], outfile, Z_DEFAULT_COMPRESSION);
         if (ret != Z_OK)
             zerr(ret);
         return ret;
@@ -386,7 +409,7 @@ int main(int argc, char **argv)
 
     /* do decompression if -d specified */
     else if (argc == 5 && strcmp(argv[1], "-d") == 0) {
-        ret = inf(pop, srcfd, pmemfile);
+        ret = inf(pop, argv[1], outfile);
         if (ret != Z_OK)
             zerr(ret);
         return ret;
