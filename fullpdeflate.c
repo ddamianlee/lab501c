@@ -31,7 +31,7 @@ POBJ_LAYOUT_END(pmem_deflate);
 #  define SET_BINARY_MODE(file)
 #endif
 
-#define CHUNK 16384
+#define CHUNK 2097152
 
 /*
  * pmem struct
