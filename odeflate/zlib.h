@@ -59,8 +59,8 @@ POBJ_LAYOUT_END(pmem_deflate);
  */
 struct myroot
 {
-    //TOID(struct z_stream_s) strm;
-    //TOID(struct deflate_state) s;
+    TOID(struct z_stream) strm;
+    TOID(struct deflate_state) s;
     TOID(struct InOutbuffer) io;
     //TOID(struct static_tree_desc_s) static_tree_desc;
 
@@ -240,7 +240,7 @@ typedef gz_header FAR *gz_headerp;
 
                         /* basic functions */
 
-ZEXTERN const char * ZEXPORT zlibVersion OF((void));
+//ZEXTERN const char * ZEXPORT zlibVersion OF((void));
 /* The application can compare zlibVersion and ZLIB_VERSION for consistency.
    If the first character differs, the library code actually used is not
    compatible with the zlib.h header file used by the application.  This check
@@ -631,9 +631,9 @@ ZEXTERN int ZEXPORT deflateInit2 OF((z_streamp strm,
    compression: this will be done by deflate().
 */
 
-ZEXTERN int ZEXPORT deflateSetDictionary OF((TOID(struct z_stream) strm,
-                                             const Bytef *dictionary,
-                                             uInt  dictLength));
+// ZEXTERN int ZEXPORT deflateSetDictionary OF((TOID(struct z_stream) strm,
+//                                              const Bytef *dictionary,
+//                                              uInt  dictLength));
 /*
      Initializes the compression dictionary from the given byte sequence
    without producing any compressed output.  When using the zlib format, this
@@ -675,9 +675,9 @@ ZEXTERN int ZEXPORT deflateSetDictionary OF((TOID(struct z_stream) strm,
    not perform any compression: this will be done by deflate().
 */
 
-ZEXTERN int ZEXPORT deflateGetDictionary OF((TOID(struct z_stream) strm,
-                                             Bytef *dictionary,
-                                             uInt  *dictLength));
+// ZEXTERN int ZEXPORT deflateGetDictionary OF((TOID(struct z_stream) strm,
+//                                              Bytef *dictionary,
+//                                              uInt  *dictLength));
 /*
      Returns the sliding dictionary being maintained by deflate.  dictLength is
    set to the number of bytes in the dictionary, and that many bytes are copied
@@ -697,8 +697,8 @@ ZEXTERN int ZEXPORT deflateGetDictionary OF((TOID(struct z_stream) strm,
    stream state is inconsistent.
 */
 
-ZEXTERN int ZEXPORT deflateCopy OF((z_streamp dest,
-                                    z_streamp source));
+// ZEXTERN int ZEXPORT deflateCopy OF((z_streamp dest,
+//                                     z_streamp source));
 /*
      Sets the destination stream as a complete copy of the source stream.
 
@@ -961,8 +961,8 @@ ZEXTERN int ZEXPORT inflateSync OF((TOID(struct z_stream) strm));
    input each time, until success or end of the input data.
 */
 
-ZEXTERN int ZEXPORT inflateCopy OF((z_streamp dest,
-                                    z_streamp source));
+// ZEXTERN int ZEXPORT inflateCopy OF((z_streamp dest,
+//                                     z_streamp source));
 /*
      Sets the destination stream as a complete copy of the source stream.
 

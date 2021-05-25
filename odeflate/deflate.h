@@ -84,9 +84,9 @@ struct ct_data {
 //typedef struct static_tree_desc_s  static_tree_desc;
 
 struct tree_desc {
-    TOID(struct ct_data) dyn_tree;           /* the dynamic tree */
+    struct ct_data *dyn_tree;           /* the dynamic tree */
     int     max_code;                         /* largest code with non zero frequency */
-    TOID(struct static_tree_desc) stat_desc; /* the corresponding static tree */
+    struct static_tree_desc *stat_desc; /* the corresponding static tree */
 };
 
 typedef ush Pos;
@@ -195,13 +195,13 @@ struct deflate_state {
 
                 /* used by trees.c: */
     /* Didn't use ct_data typedef below to suppress compiler warning */
-    TOID(struct ct_data) dyn_ltree[HEAP_SIZE];   /* literal and length tree */
-    TOID(struct ct_data) dyn_dtree[2*D_CODES+1]; /* distance tree */
-    TOID(struct ct_data) bl_tree[2*BL_CODES+1];  /* Huffman tree for bit lengths */
+    struct ct_data dyn_ltree[HEAP_SIZE];   /* literal and length tree */
+    struct ct_data dyn_dtree[2*D_CODES+1]; /* distance tree */
+    struct ct_data bl_tree[2*BL_CODES+1];  /* Huffman tree for bit lengths */
 
-    TOID(struct tree_desc) l_desc;               /* desc. for literal tree */
-    TOID(struct tree_desc) d_desc;               /* desc. for distance tree */
-    TOID(struct tree_desc) bl_desc;              /* desc. for bit length tree */
+    struct tree_desc l_desc;               /* desc. for literal tree */
+    struct tree_desc d_desc;               /* desc. for distance tree */
+    struct tree_desc bl_desc;              /* desc. for bit length tree */
 
     ush bl_count[MAX_BITS+1];
     /* number of codes at each bit length for an optimal tree */
@@ -297,12 +297,12 @@ struct deflate_state {
 
         /* in trees.c */
 void ZLIB_INTERNAL _tr_init OF((TOID(struct deflate_state) s));
-int ZLIB_INTERNAL _tr_tally OF((deflate_state *s, unsigned dist, unsigned lc));
-void ZLIB_INTERNAL _tr_flush_block OF((deflate_state *s, charf *buf,
+int ZLIB_INTERNAL _tr_tally OF((TOID(struct deflate_state) s, unsigned dist, unsigned lc));
+void ZLIB_INTERNAL _tr_flush_block OF((PMEMobjpool *pop, TOID(struct deflate_state) s, charf *buf,
                         ulg stored_len, int last));
-void ZLIB_INTERNAL _tr_flush_bits OF((deflate_state *s));
-void ZLIB_INTERNAL _tr_align OF((deflate_state *s));
-void ZLIB_INTERNAL _tr_stored_block OF((deflate_state *s, charf *buf,
+void ZLIB_INTERNAL _tr_flush_bits OF((TOID(struct deflate_state) s));
+void ZLIB_INTERNAL _tr_align OF((TOID(struct deflate_state) s));
+void ZLIB_INTERNAL _tr_stored_block OF((PMEMobjpool *pop, TOID (struct deflate_state) s, charf *buf,
                         ulg stored_len, int last));
 
 #define d_code(dist) \
@@ -327,7 +327,7 @@ void ZLIB_INTERNAL _tr_stored_block OF((deflate_state *s, charf *buf,
   { uch cc = (c); \
     D_RW(s)->d_buf[D_RO(s)->last_lit] = 0; \
     D_RW(s)->l_buf[(D_RW(s)->last_lit)++] = cc; \
-    D_RW(s)->dyn_ltree[cc].Freq++; \
+    (D_RW(s)->dyn_ltree[cc].Freq)++; \
     flush = (D_RW(s)->last_lit == (D_RO(s)->lit_bufsize)-1); \
    }
 # define _tr_tally_dist(s, distance, length, flush) \
@@ -336,8 +336,8 @@ void ZLIB_INTERNAL _tr_stored_block OF((deflate_state *s, charf *buf,
     D_RW(s)->d_buf[D_RO(s)->last_lit] = dist; \
     D_RW(s)->l_buf[(D_RW(s)->last_lit++)] = len; \
     dist--; \
-    D_RW(s)->dyn_ltree[_length_code[len]+LITERALS+1].Freq++; \
-    D_RW(s)->dyn_dtree[d_code(dist)].Freq++; \
+    (D_RW(s)->dyn_ltree[_length_code[len]+LITERALS+1].Freq)++; \
+    (D_RW(s)->dyn_dtree[d_code(dist)].Freq)++; \
     flush = (D_RW(s)->last_lit == (D_RO(s)->lit_bufsize)-1); \
   }
 #else
