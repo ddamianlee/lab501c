@@ -407,13 +407,13 @@ void ZLIB_INTERNAL _tr_init(s)
 {
     tr_static_init();
 
-    D_RW(s)->l_desc.dyn_tree = D_RO(s)->dyn_ltree;
+    D_RW(s)->l_desc.dyn_tree = D_RW(s)->dyn_ltree;
     D_RW(s)->l_desc.stat_desc = &static_l_desc;
 
-    D_RW(s)->d_desc.dyn_tree = D_RO(s)->dyn_dtree;
+    D_RW(s)->d_desc.dyn_tree = D_RW(s)->dyn_dtree;
     D_RW(s)->d_desc.stat_desc = &static_d_desc;
 
-    D_RW(s)->bl_desc.dyn_tree = D_RO(s)->bl_tree;
+    D_RW(s)->bl_desc.dyn_tree = D_RW(s)->bl_tree;
     D_RW(s)->bl_desc.stat_desc = &static_bl_desc;
 
     D_RW(s)->bi_buf = 0;
@@ -720,7 +720,7 @@ local void build_tree(s, desc)
     gen_bitlen(s, (struct tree_desc *)desc);
 
     /* The field len is now set, we can generate the bit codes */
-    gen_codes ((struct ct_data *)tree, max_code, D_RO(s)->bl_count);
+    gen_codes ((struct ct_data *)tree, max_code, D_RW(s)->bl_count);
 }
 
 /* ===========================================================================
@@ -951,8 +951,8 @@ void ZLIB_INTERNAL _tr_flush_block(pop, s, buf, stored_len, last)
     if (D_RO(s)->level > 0) {
 
         /* Check if the file is binary or text */
-        if (D_RO(D_RO(s)->strm)->data_type == Z_UNKNOWN)
-            D_RW(D_RO(s)->strm)->data_type = detect_data_type(s);
+        if (D_RO(D_RW(s)->strm)->data_type == Z_UNKNOWN)
+            D_RW(D_RW(s)->strm)->data_type = detect_data_type(s);
 
         /* Construct the literal and distance trees */
         build_tree(s, (struct tree_desc *)(&(D_RW(s)->l_desc)));

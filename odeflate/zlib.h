@@ -32,6 +32,7 @@
 #define ZLIB_H
 
 #include "zconf.h"
+#include "zutil.h"
 #include <libpmemobj.h>
 
 #ifdef __cplusplus
@@ -110,7 +111,7 @@ struct z_stream {
     uInt     avail_in;  /* number of bytes available at next_in */
     uLong    total_in;  /* total number of input bytes read so far */
 
-    ushf     *overlay;
+    unsigned short     *overlay;
     Bytef    *next_out; /* next output byte will go here */
     uInt     avail_out; /* remaining free space at next_out */
     uLong    total_out; /* total number of bytes output so far */

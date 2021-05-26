@@ -166,14 +166,14 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
             }
             D_RW(strm)->avail_in = input_len;
             flush = (D_RO(strm)->avail_in == 0) ? Z_FINISH : Z_NO_FLUSH;
-            D_RW(strm)->next_in = D_RO(io)->in;
+            D_RW(strm)->next_in = D_RW(io)->in;
 
             /* run deflate() on input until output buffer not full, finish
             compression if all of source has been read in */
             do 
             {
                 D_RW(strm)->avail_out = CHUNK;
-                D_RW(strm)->next_out = D_RO(io)->out;
+                D_RW(strm)->next_out = D_RW(io)->out;
                 ret = deflate(pop, strm, flush);    /* no bad return value */
                 assert(ret != Z_STREAM_ERROR);  /* state not clobbered */
                 D_RW(io)->have = CHUNK - D_RO(strm)->avail_out;
@@ -340,7 +340,7 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
 /* report a zlib or i/o error */
 void zerr(int ret)
 {
-    fputs("pdeflate: ", stderr);
+    fputs("odeflate: ", stderr);
     switch (ret) {
     case Z_ERRNO:
         if (ferror(stdin))
@@ -371,7 +371,7 @@ int main(int argc, char **argv)
     char *outfile = argv[2];    /* output file path */   
 
     /* create a memory pool */
-    PMEMobjpool *pop = pmemobj_create(argv[3], POBJ_LAYOUT_NAME(pmem_deflate), 3221225472, 0666);
+    PMEMobjpool *pop = pmemobj_create(argv[3], POBJ_LAYOUT_NAME(pmem_deflate), 5368709120, 0666);
     if (pop == NULL)
     {
         perror("pmemobj_create");
@@ -390,10 +390,11 @@ int main(int argc, char **argv)
 
     /* do decompression if -d specified */
     else if (argc == 5 && strcmp(argv[1], "-d") == 0) {
-        ret = inf(pop, argv[1], outfile);
-        if (ret != Z_OK)
-            zerr(ret);
-        return ret;
+        // ret = inf(pop, argv[1], outfile);
+        // if (ret != Z_OK)
+        //     zerr(ret);
+        // return ret;
+        return 0;
     }
 
     /* otherwise, report usage */
