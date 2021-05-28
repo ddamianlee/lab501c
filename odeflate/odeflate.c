@@ -374,7 +374,7 @@ int main(int argc, char **argv)
     char *outfile = argv[2];    /* output file path */   
 
     /* create a memory pool */
-    PMEMobjpool *pop = pmemobj_create(argv[3], POBJ_LAYOUT_NAME(pmem_deflate), 5368709120, 0666);
+    PMEMobjpool *pop = pmemobj_create(argv[3], POBJ_LAYOUT_NAME(pmem_deflate), 1073741824, 0666);
     if (pop == NULL)
     {
         perror("pmemobj_create");

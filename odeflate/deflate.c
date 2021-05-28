@@ -884,8 +884,6 @@ int ZEXPORT deflate (pop, strm, flush)
     if (D_RO(strm)->avail_in != 0 || D_RO(s)->lookahead != 0 ||
         (flush != Z_NO_FLUSH && D_RO(s)->status != FINISH_STATE)) {
         block_state bstate;
-        int x = D_RO(s)->level;
-        printf("%d", x);
         
         bstate = D_RO(s)->level == 0 ? deflate_stored(pop, s, flush) :
                  D_RO(s)->strategy == Z_HUFFMAN_ONLY ? deflate_huff(pop, s, flush) :
@@ -1252,8 +1250,8 @@ local block_state deflate_stored(pop, s, flush)
             if (left > len)
                 left = len;
             //zmemcpy(D_RW(s)->strm->next_out, s->window + s->block_start, left);
-            memcpy(D_RW(D_RW(s)->strm)->next_out, D_RW(s)->window + D_RO(s)->block_start, left);
-            //pmemobj_memcpy_persist(pop, D_RW(D_RW(s)->strm)->next_out, D_RW(s)->window + D_RO(s)->block_start, left);
+            //memcpy(D_RW(D_RW(s)->strm)->next_out, D_RW(s)->window + D_RO(s)->block_start, left);
+            pmemobj_memcpy_persist(pop, D_RW(D_RW(s)->strm)->next_out, D_RW(s)->window + D_RO(s)->block_start, left);
             D_RW(D_RW(s)->strm)->next_out += left;
             D_RW(D_RW(s)->strm)->avail_out -= left;
             D_RW(D_RW(s)->strm)->total_out += left;
@@ -1295,14 +1293,14 @@ local block_state deflate_stored(pop, s, flush)
                 /* Slide the window down. */
                 D_RW(s)->strstart -= D_RO(s)->w_size;
                 //zmemcpy(D_RW(s)->window, D_RW(s)->window + D_RO(s)->w_size, D_RO(s)->strstart);
-                memcpy(D_RW(s)->window, D_RW(s)->window + D_RO(s)->w_size, D_RO(s)->strstart);
-                //pmemobj_memcpy_persist(pop, D_RW(s)->window, D_RW(s)->window + D_RO(s)->w_size, D_RO(s)->strstart);
+                //memcpy(D_RW(s)->window, D_RW(s)->window + D_RO(s)->w_size, D_RO(s)->strstart);
+                pmemobj_memcpy_persist(pop, D_RW(s)->window, D_RW(s)->window + D_RO(s)->w_size, D_RO(s)->strstart);
                 if (D_RO(s)->matches < 2)
                     D_RW(s)->matches++;   /* add a pending slide_hash() */
             }
             //zmemcpy(D_RW(s)->window + D_RO(s)->strstart, s->strm->next_in - used, used);
-            memcpy(D_RW(s)->window + D_RO(s)->strstart, D_RW(D_RW(s)->strm)->next_in - used, used);
-            //pmemobj_memcpy_persist(pop, D_RW(s)->window + D_RO(s)->strstart, D_RW(D_RW(s)->strm)->next_in - used, used);
+            //memcpy(D_RW(s)->window + D_RO(s)->strstart, D_RW(D_RW(s)->strm)->next_in - used, used);
+            pmemobj_memcpy_persist(pop, D_RW(s)->window + D_RO(s)->strstart, D_RW(D_RW(s)->strm)->next_in - used, used);
             D_RW(s)->strstart += used;
         }
         D_RW(s)->block_start = D_RO(s)->strstart;
@@ -1327,8 +1325,8 @@ local block_state deflate_stored(pop, s, flush)
         D_RW(s)->block_start -= D_RO(s)->w_size;
         D_RW(s)->strstart -= D_RO(s)->w_size;
         //zmemcpy(D_RW(s)->window, D_RW(s)->window + D_RO(s)->w_size, D_RO(s)->strstart);
-        memcpy(D_RW(s)->window, D_RW(s)->window + D_RO(s)->w_size, D_RO(s)->strstart);
-        //pmemobj_memcpy_persist(pop, D_RW(s)->window, D_RW(s)->window + D_RO(s)->w_size, D_RO(s)->strstart);
+        //memcpy(D_RW(s)->window, D_RW(s)->window + D_RO(s)->w_size, D_RO(s)->strstart);
+        pmemobj_memcpy_persist(pop, D_RW(s)->window, D_RW(s)->window + D_RO(s)->w_size, D_RO(s)->strstart);
         if (D_RO(s)->matches < 2)
             D_RW(s)->matches++;           /* add a pending slide_hash() */
         have += D_RO(s)->w_size;          /* more space now */
