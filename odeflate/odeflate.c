@@ -179,7 +179,7 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
                 D_RW(io)->have = CHUNK - D_RO(strm)->avail_out;
                 // for(int q = 0; q < D_RO(io)->have; q++)
                 //     printf("%c", D_RO(io)->out[q]);
-                printf("\n\nprint done");
+                //printf("\n\nprint done");
                 if (fwrite(D_RO(io)->out, 1, D_RO(io)->have, fp) != D_RO(io)->have) 
                 {
                     (void)deflateEnd(strm);

@@ -244,29 +244,29 @@ int ZEXPORT deflateInit2_(pop, strm, level, method, windowBits, memLevel, strate
         D_RW(s)->hash_mask = D_RO(s)->hash_size - 1;
         D_RW(s)->hash_shift =  ((D_RO(s)->hash_bits+MIN_MATCH-1)/MIN_MATCH);
 
-        //D_RW(s)->window = (Bytef *) ZALLOC(strm, D_RO(s)->w_size, 2*sizeof(Byte));
-        //D_RW(s)->prev   = (Posf *)  ZALLOC(strm, D_RO(s)->w_size, sizeof(Pos));
-        //D_RW(s)->head   = (Posf *)  ZALLOC(strm, D_RO(s)->hash_size, sizeof(Pos));
+        D_RW(s)->window = (Bytef *) ZALLOC(D_RO(strm), D_RO(s)->w_size, 2*sizeof(Byte));
+        D_RW(s)->prev   = (Posf *)  ZALLOC(D_RO(strm), D_RO(s)->w_size, sizeof(Pos));
+        D_RW(s)->head   = (Posf *)  ZALLOC(D_RO(strm), D_RO(s)->hash_size, sizeof(Pos));
         //D_RW(s)->window = (Bytef *) POBJ_ZALLOC(pop, &s, struct deflate_state, D_RO(s)->w_size * (2*sizeof(Byte)));
         //D_RW(s)->prev = (Posf *) POBJ_ZALLOC(pop, &s, struct deflate_state, D_RO(s)->w_size * sizeof(Pos));
         //D_RW(s)->head = (Posf *) POBJ_ZALLOC(pop, &s, struct deflate_state, D_RO(s)->hash_size * sizeof(Pos));
         
-        D_RW(s)->window = (Bytef *)malloc(D_RO(s)->w_size * 2*sizeof(Byte));
-        D_RW(s)->prev = (Posf *)malloc(D_RO(s)->w_size * sizeof(Pos));
-        D_RW(s)->head = (Posf *)malloc(D_RO(s)->hash_size * 2*sizeof(Byte));
+        //D_RW(s)->window = (Bytef *)malloc(D_RO(s)->w_size * 2*sizeof(Byte));
+        //D_RW(s)->prev = (Posf *)malloc(D_RO(s)->w_size * sizeof(Pos));
+        //D_RW(s)->head = (Posf *)malloc(D_RO(s)->hash_size * 2*sizeof(Byte));
 
         D_RW(s)->high_water = 0;      /* nothing written to s->window yet */
 
         D_RW(s)->lit_bufsize = 1 << (memLevel + 6); /* 16K elements by default */
 
-        //overlay = (ushf *) ZALLOC(D_RO(strm), D_RO(s)->lit_bufsize, sizeof(ush)+2);
-        overlay = (ushf *)malloc(D_RO(s)->lit_bufsize * sizeof(ush)+2);
+        overlay = (ushf *) ZALLOC(D_RO(strm), D_RO(s)->lit_bufsize, sizeof(ush)+2);
+        //overlay = (ushf *)malloc(D_RO(s)->lit_bufsize * sizeof(ush)+2);
         //D_RW(strm)->overlay = pmemobj_tx_alloc(D_RO(s)->lit_bufsize * sizeof(ush)+2, TOID_TYPE_NUM(struct z_stream));
        
         //D_RW(strm)->overlay = (unsigned short *) POBJ_ZALLOC(pop, &s, struct z_stream, D_RO(s)->lit_bufsize * sizeof(ush)+2);
         //D_RW(strm)->overlay = (unsigned short *)malloc(D_RO(s)->lit_bufsize * sizeof(ush)+2);
         //D_RW(s)->pending_buf = (uchf *)D_RW(strm)->overlay;
-        D_RW(s)->pending_buf = (ushf *) overlay;
+        D_RW(s)->pending_buf = (uchf *) overlay;
         D_RW(s)->pending_buf_size = (ulg)D_RO(s)->lit_bufsize * (sizeof(ush)+2L);
 
         if (D_RO(s)->window == Z_NULL || D_RO(s)->prev == Z_NULL || D_RO(s)->head == Z_NULL ||
