@@ -45,6 +45,8 @@ extern "C" {
 #define ZLIB_VER_MINOR 2
 #define ZLIB_VER_REVISION 11
 #define ZLIB_VER_SUBREVISION 0
+typedef unsigned short ush;
+typedef unsigned char  Byte;
 
 POBJ_LAYOUT_BEGIN(pmem_deflate);
 POBJ_LAYOUT_ROOT(pmem_deflate, struct myroot);
@@ -54,6 +56,8 @@ POBJ_LAYOUT_TOID(pmem_deflate, struct InOutbuffer);
 POBJ_LAYOUT_TOID(pmem_deflate, struct ct_data);
 POBJ_LAYOUT_TOID(pmem_deflate, struct static_tree_desc);
 POBJ_LAYOUT_TOID(pmem_deflate, struct tree_desc);
+POBJ_LAYOUT_TOID(pmem_deflate, ush);
+POBJ_LAYOUT_TOID(pmem_deflate, Byte);
 POBJ_LAYOUT_END(pmem_deflate);
 /*
  * pmem struct
@@ -111,7 +115,7 @@ struct z_stream {
     uInt     avail_in;  /* number of bytes available at next_in */
     uLong    total_in;  /* total number of input bytes read so far */
 
-    //unsigned short     *overlay;
+    
     Bytef    *next_out; /* next output byte will go here */
     uInt     avail_out; /* remaining free space at next_out */
     uLong    total_out; /* total number of bytes output so far */

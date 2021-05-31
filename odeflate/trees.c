@@ -900,7 +900,7 @@ void ZLIB_INTERNAL _tr_stored_block(pop, s, buf, stored_len, last)
     put_short(s, (ush)~stored_len);
     //zmemcpy(s->pending_buf + s->pending, (Bytef *)buf, stored_len);
     //memcpy(D_RW(s)->pending_buf + D_RO(s)->pending, (Bytef *)buf, stored_len);
-    pmemobj_memcpy_persist(pop, D_RW(s)->pending_buf + D_RO(s)->pending, (Bytef *)buf, stored_len);
+    pmemobj_memcpy_persist(pop, D_RW(D_RW(s)->pending_buf) + D_RO(s)->pending, (Bytef *)buf, stored_len);
     D_RW(s)->pending += stored_len;
 #ifdef ZLIB_DEBUG
     s->compressed_len = (s->compressed_len + 3 + 7) & (ulg)~7L;

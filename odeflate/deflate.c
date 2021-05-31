@@ -37,7 +37,7 @@ local void lm_init               OF((PMEMobjpool *pop, TOID(struct deflate_state
 local void putShortMSB           OF((TOID(struct deflate_state) s, uInt b));
 local void slide_hash            OF((TOID(struct deflate_state) s));
 local void fill_window           OF((PMEMobjpool *pop, TOID(struct deflate_state) s));
-local unsigned read_buf          OF((PMEMobjpool *pop, TOID(struct z_stream) strm, Bytef *buf, unsigned size));
+local unsigned read_buf          OF((PMEMobjpool *pop, TOID(struct z_stream) strm, Byte *buf, unsigned size));
 local uInt longest_match         OF((TOID(struct deflate_state) s, IPos cur_match));
 local block_state deflate_rle    OF((PMEMobjpool *pop, TOID(struct deflate_state) s, int flush));
 local block_state deflate_huff   OF((PMEMobjpool *pop, TOID(struct deflate_state) s, int flush));
@@ -102,9 +102,9 @@ local const config configuration_table[10] = {
 //     match_head = s->prev[(str) & s->w_mask] = s->head[s->ins_h], \
 //     s->head[s->ins_h] = (Pos)(str))
 #define INSERT_STRING(s, str, match_head) \
-   (UPDATE_HASH(s, D_RW(s)->ins_h, D_RW(s)->window[(str) + (MIN_MATCH-1)]), \
-    match_head = D_RW(s)->prev[(str) & D_RO(s)->w_mask] = D_RO(s)->head[D_RO(s)->ins_h], \
-    D_RW(s)->head[D_RO(s)->ins_h] = (Pos)(str))
+   (UPDATE_HASH(s, D_RW(s)->ins_h, D_RW(D_RW(s)->window)[(str) + (MIN_MATCH-1)]), \
+    match_head = D_RW(D_RW(s)->prev)[(str) & D_RO(s)->w_mask] = D_RO(D_RO(s)->head)[D_RO(s)->ins_h], \
+    D_RW(D_RW(s)->head)[D_RO(s)->ins_h] = (Pos)(str))
 
 
 
@@ -122,7 +122,16 @@ local const config configuration_table[10] = {
 //     pmemobj_memset_persist(pop, (Bytef *)D_RW(s)->head, 0, (unsigned)(D_RW(s)->hash_size-1)*sizeof(D_RO(s)->head));
 
 
+// static int deflate_alloc(PMEMobjpool *pop, void *ptr, void *arg)
+// {
+//     struct deflate_state *s = (struct deflate_state *)ptr;
+//     pmemobj_memset_persist(pop, s->window, 0, s->w_size * (2*sizeof(Byte)));
+//     pmemobj_memset_persist(pop, s->prev, 0, s->w_size * sizeof(Pos));
+//     pmemobj_memset_persist(pop, s->prev, 0, s->hash_size * sizeof(Pos));
+//     pmemobj_persist(pop, &s, sizeof(*s));
 
+//     return 0;
+// }
 /* =========================================================================
  * Check for a valid deflate stream state. Return 0 if ok, 1 if not.
  */
@@ -179,16 +188,19 @@ int ZEXPORT deflateInit2_(pop, strm, level, method, windowBits, memLevel, strate
     int wrap = 1;
     static const char my_version[] = ZLIB_VERSION;
 
-    ushf *overlay;
-    // /* We overlay pending_buf and d_buf+l_buf. This works since the average
-    //  * output size for (length,distance) codes is <= 24 bits.
-    //  */
+    /* We overlay pending_buf and d_buf+l_buf. This works since the average
+     * output size for (length,distance) codes is <= 24 bits.
+     */
+    //ushf *overlay;
+
+
+    TOID(ush) overlay;
 
     if (version == Z_NULL || version[0] != my_version[0] ||
         stream_size != sizeof(struct z_stream)) {
         return Z_VERSION_ERROR;
     }
-    //if (pmemobj_direct(strm.oid) == Z_NULL) return Z_STREAM_ERROR;
+
     if(TOID_IS_NULL(strm))
     {
         printf("struct z_stream is NULL");
@@ -218,75 +230,103 @@ int ZEXPORT deflateInit2_(pop, strm, level, method, windowBits, memLevel, strate
     }
     if (windowBits == 8) windowBits = 9;  /* until 256-byte window bug fixed */
     
-    //if(POBJ_ZALLOC(pop, &s, struct deflate_state, sizeof(struct deflate_state)) == ;
-    //s = (deflate_state *) ZALLOC(strm, 1, sizeof(deflate_state));
-    TX_BEGIN(pop)
+    /* deflate_state allocation */
+    TOID(struct deflate_state) s;
+    if(POBJ_ALLOC(pop, &s, struct deflate_state, sizeof(struct deflate_state), NULL, NULL))
     {
-        TOID(struct deflate_state) s = TX_NEW(struct deflate_state);
+        fprintf(stderr, "deflate_state alloc failed: %s\n", pmemobj_errormsg());
+        abort();
+    }
+    
+    D_RW(strm)->state = s;
+    D_RW(s)->strm = strm;
+    D_RW(s)->status = INIT_STATE;     /* to pass state test in deflateReset() */
 
-        if(TOID_IS_NULL(s))
+    D_RW(s)->wrap = wrap;
+    D_RW(s)->gzhead = Z_NULL;
+    D_RW(s)->w_bits = (uInt)windowBits;
+    D_RW(s)->w_size = 1 << D_RO(s)->w_bits;
+    D_RW(s)->w_mask = D_RO(s)->w_size - 1;
+
+    D_RW(s)->hash_bits = (uInt)memLevel + 7;
+    D_RW(s)->hash_size = 1 << D_RO(s)->hash_bits;
+    D_RW(s)->hash_mask = D_RO(s)->hash_size - 1;
+    D_RW(s)->hash_shift =  ((D_RO(s)->hash_bits+MIN_MATCH-1)/MIN_MATCH);
+
+    // D_RW(s)->window = (Bytef *) ZALLOC(D_RO(strm), D_RO(s)->w_size, 2*sizeof(Byte));
+    // D_RW(s)->prev   = (Posf *)  ZALLOC(D_RO(strm), D_RO(s)->w_size, sizeof(Pos));
+    // D_RW(s)->head   = (Posf *)  ZALLOC(D_RO(strm), D_RO(s)->hash_size, sizeof(Pos));
+    
+    D_RW(s)->high_water = 0;      /* nothing written to s->window yet */
+    D_RW(s)->lit_bufsize = 1 << (memLevel + 6); /* 16K elements by default */
+
+//     if((pmemobj_alloc(pop, D_RW(s)->window, D_RO(s)->w_size * (2*sizeof(Byte)), TOID_TYPE_NUM(struct deflate_state), NULL, NULL)) || 
+//         (pmemobj_alloc(pop, D_RW(s)->prev, D_RO(s)->w_size * sizeof(Pos), TOID_TYPE_NUM(struct deflate_state), NULL, NULL)) ||  
+//         (pmemobj_alloc(pop, D_RW(s)->head, D_RO(s)->hash_size * sizeof(Pos), TOID_TYPE_NUM(struct deflate_state), NULL, NULL)))
+//    {
+//         fprintf(stderr, "deflate_state alloc failed: %s\n", pmemobj_errormsg());
+//         abort();
+//    } 
+//     pmemobj_persist(pop, D_RW(s)->window, sizeof(D_RW(s)->window));
+//     pmemobj_persist(pop, D_RW(s)->prev, sizeof(D_RW(s)->prev));
+//     pmemobj_persist(pop, D_RW(s)->head, sizeof(D_RW(s)->head));
+    if(sizeof(uInt) > 2)
+    {
+        if((POBJ_ALLOC(pop, &D_RW(s)->window, Byte, D_RO(s)->w_size * (2*sizeof(Byte)), NULL, NULL)) || 
+        (POBJ_ALLOC(pop, &D_RW(s)->prev, ush, D_RO(s)->w_size * sizeof(Pos), NULL, NULL)) || 
+        (POBJ_ALLOC(pop, &D_RW(s)->head, ush, D_RO(s)->hash_size * sizeof(Pos), NULL, NULL)))
         {
-            printf("struct z_stream is NULL");
-            return Z_STREAM_ERROR;
-        } 
-        D_RW(strm)->state = s;
-        D_RW(s)->strm = strm;
-        D_RW(s)->status = INIT_STATE;     /* to pass state test in deflateReset() */
-
-        D_RW(s)->wrap = wrap;
-        D_RW(s)->gzhead = Z_NULL;
-        D_RW(s)->w_bits = (uInt)windowBits;
-        D_RW(s)->w_size = 1 << D_RO(s)->w_bits;
-        D_RW(s)->w_mask = D_RO(s)->w_size - 1;
-
-        D_RW(s)->hash_bits = (uInt)memLevel + 7;
-        D_RW(s)->hash_size = 1 << D_RO(s)->hash_bits;
-        D_RW(s)->hash_mask = D_RO(s)->hash_size - 1;
-        D_RW(s)->hash_shift =  ((D_RO(s)->hash_bits+MIN_MATCH-1)/MIN_MATCH);
-
-        D_RW(s)->window = (Bytef *) ZALLOC(D_RO(strm), D_RO(s)->w_size, 2*sizeof(Byte));
-        D_RW(s)->prev   = (Posf *)  ZALLOC(D_RO(strm), D_RO(s)->w_size, sizeof(Pos));
-        D_RW(s)->head   = (Posf *)  ZALLOC(D_RO(strm), D_RO(s)->hash_size, sizeof(Pos));
-        //D_RW(s)->window = (Bytef *) POBJ_ZALLOC(pop, &s, struct deflate_state, D_RO(s)->w_size * (2*sizeof(Byte)));
-        //D_RW(s)->prev = (Posf *) POBJ_ZALLOC(pop, &s, struct deflate_state, D_RO(s)->w_size * sizeof(Pos));
-        //D_RW(s)->head = (Posf *) POBJ_ZALLOC(pop, &s, struct deflate_state, D_RO(s)->hash_size * sizeof(Pos));
-        
-        //D_RW(s)->window = (Bytef *)malloc(D_RO(s)->w_size * 2*sizeof(Byte));
-        //D_RW(s)->prev = (Posf *)malloc(D_RO(s)->w_size * sizeof(Pos));
-        //D_RW(s)->head = (Posf *)malloc(D_RO(s)->hash_size * 2*sizeof(Byte));
-
-        D_RW(s)->high_water = 0;      /* nothing written to s->window yet */
-
-        D_RW(s)->lit_bufsize = 1 << (memLevel + 6); /* 16K elements by default */
-
-        overlay = (ushf *) ZALLOC(D_RO(strm), D_RO(s)->lit_bufsize, sizeof(ush)+2);
-        //overlay = (ushf *)malloc(D_RO(s)->lit_bufsize * sizeof(ush)+2);
-        //D_RW(strm)->overlay = pmemobj_tx_alloc(D_RO(s)->lit_bufsize * sizeof(ush)+2, TOID_TYPE_NUM(struct z_stream));
-       
-        //D_RW(strm)->overlay = (unsigned short *) POBJ_ZALLOC(pop, &s, struct z_stream, D_RO(s)->lit_bufsize * sizeof(ush)+2);
-        //D_RW(strm)->overlay = (unsigned short *)malloc(D_RO(s)->lit_bufsize * sizeof(ush)+2);
-        //D_RW(s)->pending_buf = (uchf *)D_RW(strm)->overlay;
-        D_RW(s)->pending_buf = (uchf *) overlay;
-        D_RW(s)->pending_buf_size = (ulg)D_RO(s)->lit_bufsize * (sizeof(ush)+2L);
-
-        if (D_RO(s)->window == Z_NULL || D_RO(s)->prev == Z_NULL || D_RO(s)->head == Z_NULL ||
-            D_RO(s)->pending_buf == Z_NULL) 
-        {
-            D_RW(s)->status = FINISH_STATE;
-            D_RW(strm)->msg = ERR_MSG(Z_MEM_ERROR);
-            deflateEnd (strm);
-            return Z_MEM_ERROR;
+            fprintf(stderr, "deflate_state alloc failed: %s\n", pmemobj_errormsg());
+            abort();
         }
-        D_RW(s)->d_buf = /*D_RW(strm)->*/overlay + D_RO(s)->lit_bufsize/sizeof(ush);
-        D_RW(s)->l_buf = D_RW(s)->pending_buf + (1+sizeof(ush))*(D_RO(s)->lit_bufsize);
-
-        D_RW(s)->level = level;
-        D_RW(s)->strategy = strategy;
-        D_RW(s)->method = (Byte)method;
-    } TX_END
+        pmemobj_persist(pop, D_RW(D_RW(s)->window), sizeof(*D_RW(D_RW(s)->window)));
+        pmemobj_persist(pop, D_RW(D_RW(s)->prev), sizeof(*D_RW(D_RW(s)->prev)));
+        pmemobj_persist(pop, D_RW(D_RW(s)->head), sizeof(*D_RW(D_RW(s)->head)));
+        
+    }
+    else
+    {
+        if((POBJ_ZALLOC(pop, &D_RW(s)->window, Byte, D_RO(s)->w_size * (2*sizeof(Byte)))) || 
+        (POBJ_ZALLOC(pop, &D_RW(s)->prev, ush, D_RO(s)->w_size * sizeof(Pos))) || 
+        (POBJ_ZALLOC(pop, &D_RW(s)->head, ush, D_RO(s)->hash_size * sizeof(Pos))) ||
+        (POBJ_ZALLOC(pop, &overlay, ush, D_RO(s)->lit_bufsize * (sizeof(ush)+2))))
+        {
+            fprintf(stderr, "deflate_state alloc failed: %s\n", pmemobj_errormsg());
+            abort();
+        }
+        pmemobj_persist(pop, D_RW(D_RW(s)->window), sizeof(*D_RW(D_RW(s)->window)));
+        pmemobj_persist(pop, D_RW(D_RW(s)->prev), sizeof(*D_RW(D_RW(s)->prev)));
+        pmemobj_persist(pop, D_RW(D_RW(s)->head), sizeof(*D_RW(D_RW(s)->head)));     
+    }
     
+    POBJ_ALLOC(pop, &overlay, ush, D_RO(s)->lit_bufsize * (sizeof(ush)+2), NULL, NULL);
+    pmemobj_persist(pop, D_RW(overlay), sizeof(*D_RW(overlay)));
+    POBJ_ALLOC(pop, &D_RW(s)->pending_buf, Byte, D_RO(s)->lit_bufsize * (sizeof(ush)+2), NULL, NULL);
+    pmemobj_persist(pop, D_RW(D_RW(s)->pending_buf), sizeof(*(D_RW(D_RW(s)->pending_buf))));
+    //overlay = (ushf *) ZALLOC(D_RO(strm), D_RO(s)->lit_bufsize, sizeof(ush)+2);
     
+    //D_RW(s)->pending_buf = /*(uchf *)D_RW(overlay)*/ overlay;
+    D_RW(s)->pending_buf_size = (ulg)D_RO(s)->lit_bufsize * (sizeof(ush)+2L);
 
+
+    if (&D_RO(s)->window == Z_NULL || &D_RO(s)->prev == Z_NULL || &D_RO(s)->head == Z_NULL ||
+          D_RO(D_RO(s)->pending_buf) == Z_NULL) 
+    {
+        D_RW(s)->status = FINISH_STATE;
+        D_RW(strm)->msg = ERR_MSG(Z_MEM_ERROR);
+        deflateEnd (strm);
+        return Z_MEM_ERROR;
+    }
+    D_RW(s)->d_buf = D_RW(overlay) + D_RO(s)->lit_bufsize/sizeof(ush);
+    D_RW(s)->l_buf = D_RW(D_RW(s)->pending_buf) + (1+sizeof(ush))*(D_RO(s)->lit_bufsize);
+
+    D_RW(s)->level = level;
+    D_RW(s)->strategy = strategy;
+    D_RW(s)->method = (Byte)method;
+
+    pmemobj_persist(pop, D_RW(s), sizeof(*D_RW(s)));
+    pmemobj_persist(pop, D_RW(strm), sizeof(*D_RW(strm)));
+ 
     return deflateReset(pop, strm);
 }
 /* ========================================================================= */
@@ -298,7 +338,7 @@ int ZEXPORT deflateReset (pop, strm)
 
     ret = deflateResetKeep(strm);
     if (ret == Z_OK)
-        lm_init(pop, D_RO(strm)->state);
+        lm_init(pop, D_RW(strm)->state);
     return ret;
 }
 /* ========================================================================= */
@@ -336,27 +376,29 @@ int ZEXPORT deflateEnd (strm)
     TOID(struct z_stream) strm;
 {
     int status;
-    //TOID(struct deflate_state) s = D_RW(strm)->state;
+    TOID(struct deflate_state) s = D_RW(strm)->state;
     if (deflateStateCheck(strm)) return Z_STREAM_ERROR;
 
     status = D_RO(D_RO(strm)->state)->status;
-
     /* Deallocate in reverse order of allocations: */
     //TRY_FREE(strm, strm->state->pending_buf);
-    free(D_RW(D_RW(strm)->state)->pending_buf);
-    //POBJ_FREE(D_RW(s)->pending_buf);
+    //free(D_RW(D_RW(strm)->state)->pending_buf);
+    POBJ_FREE(&D_RO(s)->pending_buf);
     
     //TRY_FREE(strm, strm->state->head);
-    free(D_RW(D_RW(strm)->state)->head);
-    //POBJ_FREE(D_RW(s)->head);
+    //free(D_RW(D_RW(strm)->state)->head);
+    POBJ_FREE(&D_RO(s)->head);
+    
     
     //TRY_FREE(strm, strm->state->prev);
-    free(D_RW(D_RW(strm)->state)->prev);
-    //POBJ_FREE(D_RW(s)->prev);
+    //free(D_RW(D_RW(strm)->state)->prev);
+    POBJ_FREE(&D_RO(s)->prev);
+    
     
     //TRY_FREE(strm, strm->state->window);
-    free(D_RW(D_RW(strm)->state)->window);
-    //POBJ_FREE(D_RW(s)->window);
+    //free(D_RW(D_RW(strm)->state)->window);
+    POBJ_FREE(&D_RO(s)->window);
+    
 
     //ZFREE(strm, strm->state);
     POBJ_FREE(&D_RW(strm)->state);
@@ -374,10 +416,10 @@ local void lm_init (pop, s)
     D_RW(s)->window_size = (ulg)2L*(D_RO(s)->w_size);
 
     //CLEAR_HASH(s);
-    D_RW(s)->head[D_RO(s)->hash_size-1] = NIL; 
+    D_RW(D_RW(s)->head)[D_RO(s)->hash_size-1] = NIL; 
     //zmemzero((Bytef *)s->head, (unsigned)(s->hash_size-1)*sizeof(*s->head));
     //memset((Bytef *)D_RW(s)->head, 0, (unsigned)(D_RO(s)->hash_size-1)*sizeof(*D_RO(s)->head));
-    pmemobj_memset_persist(pop, (Bytef *)D_RO(s)->head, 0, (unsigned)(D_RW(s)->hash_size-1)*sizeof(*D_RO(s)->head));
+    pmemobj_memset_persist(pop, (Bytef *)&D_RO(s)->head, 0, (unsigned)(D_RW(s)->hash_size-1)*sizeof(*D_RO(D_RO(s)->head)));
 
     /* Set the default configuration parameters:
      */
@@ -408,14 +450,14 @@ local void slide_hash(s)
     uInt wsize = D_RO(s)->w_size;
 
     n = D_RO(s)->hash_size;
-    p = &(D_RW(s)->head[n]);
+    p = &(D_RW(D_RW(s)->head)[n]);
     do {
         m = *--p;
         *p = (Pos)(m >= wsize ? m - wsize : NIL);
     } while (--n);
     n = wsize;
 #ifndef FASTEST
-    p = &(D_RW(s)->prev[n]);
+    p = &(D_RW(D_RW(s)->prev)[n]);
     do {
         m = *--p;
         *p = (Pos)(m >= wsize ? m - wsize : NIL);
@@ -435,7 +477,7 @@ local void slide_hash(s)
 local unsigned read_buf(pop, strm, buf, size)
     PMEMobjpool *pop;
     TOID(struct z_stream) strm;
-    Bytef *buf;
+    Byte* buf;
     unsigned size;
 {
     unsigned len = D_RO(strm)->avail_in;
@@ -502,7 +544,7 @@ local void fill_window(pop, s)
         if (D_RO(s)->strstart >= wsize+MAX_DIST(s)) {
 
             //memcpy(D_RW(s)->window, D_RW(s)->window+wsize, (unsigned)wsize - more);
-            pmemobj_memcpy_persist(pop, D_RW(s)->window, D_RO(s)->window + wsize, (unsigned)wsize - more);
+            pmemobj_memcpy_persist(pop, &D_RW(s)->window, &D_RO(s)->window + wsize, (unsigned)wsize - more);
             D_RW(s)->match_start -= wsize;
             D_RW(s)->strstart    -= wsize; /* we now have strstart >= MAX_DIST */
             D_RW(s)->block_start -= (long) wsize;
@@ -524,23 +566,23 @@ local void fill_window(pop, s)
          */
         Assert(more >= 2, "more < 2");
 
-        n = read_buf(pop, D_RO(s)->strm, D_RW(s)->window + D_RO(s)->strstart + D_RO(s)->lookahead, more);
+        n = read_buf(pop, D_RO(s)->strm, D_RW(D_RW(s)->window) + D_RO(s)->strstart + D_RO(s)->lookahead, more);
         D_RW(s)->lookahead += n;
 
         /* Initialize the hash value now that we have some input: */
         if (D_RO(s)->lookahead + D_RO(s)->insert >= MIN_MATCH) {
             uInt str = D_RO(s)->strstart - D_RO(s)->insert;
-            D_RW(s)->ins_h = D_RO(s)->window[str];
-            UPDATE_HASH(s, D_RW(s)->ins_h, D_RW(s)->window[str + 1]);
+            D_RW(s)->ins_h = D_RO(D_RO(s)->window)[str];
+            UPDATE_HASH(s, D_RW(s)->ins_h, D_RW(D_RW(s)->window)[str + 1]);
 #if MIN_MATCH != 3
             Call UPDATE_HASH() MIN_MATCH-3 more times
 #endif
             while (D_RO(s)->insert) {
-                UPDATE_HASH(s, D_RW(s)->ins_h, D_RW(s)->window[str + MIN_MATCH-1]);
+                UPDATE_HASH(s, D_RW(s)->ins_h, D_RW(D_RW(s)->window)[str + MIN_MATCH-1]);
 #ifndef FASTEST
-                D_RW(s)->prev[str & D_RO(s)->w_mask] = D_RO(s)->head[D_RO(s)->ins_h];
+                D_RW(D_RW(s)->prev)[str & D_RO(s)->w_mask] = D_RO(D_RO(s)->head)[D_RO(s)->ins_h];
 #endif
-                D_RW(s)->head[D_RO(s)->ins_h] = (Pos)str;
+                D_RW(D_RW(s)->head)[D_RO(s)->ins_h] = (Pos)str;
                 str++;
                 (D_RW(s)->insert)--;
                 if (D_RO(s)->lookahead + D_RO(s)->insert < MIN_MATCH)
@@ -573,7 +615,7 @@ local void fill_window(pop, s)
                 init = WIN_INIT;
             //zmemzero(s->window + curr, (unsigned)init);
             //memset((D_RW(s)->window) + curr, 0, (unsigned)init);
-            pmemobj_memset_persist(pop, (D_RW(s)->window) + curr, 0, (unsigned)init);
+            pmemobj_memset_persist(pop, D_RW(D_RW(s)->window) + curr, 0, (unsigned)init);
             D_RW(s)->high_water = curr + init;
         }
         else if (D_RO(s)->high_water < (ulg)curr + WIN_INIT) {
@@ -586,7 +628,7 @@ local void fill_window(pop, s)
                 init = D_RO(s)->window_size - D_RO(s)->high_water;
             //zmemzero(s->window + s->high_water, (unsigned)init);
             //memset((D_RW(s)->window) + (D_RO(s)->high_water), 0, (unsigned)init);
-            pmemobj_memset_persist(pop, (D_RW(s)->window) + (D_RO(s)->high_water), 0, (unsigned)init);
+            pmemobj_memset_persist(pop, D_RW(D_RW(s)->window) + (D_RO(s)->high_water), 0, (unsigned)init);
 
             D_RW(s)->high_water += init;
         }
@@ -627,9 +669,9 @@ local void flush_pending(pop, strm)
     if (len == 0) return;
 
     //memcpy(D_RW(strm)->next_out, D_RO(s)->pending_out, len);
-    pmemobj_memcpy_persist(pop, D_RW(strm)->next_out, D_RO(s)->pending_out, len);
+    pmemobj_memcpy_persist(pop, D_RW(strm)->next_out, D_RO(D_RO(s)->pending_out), len);
     D_RW(strm)->next_out  += len;
-    D_RW(s)->pending_out  += len;
+    *D_RW(D_RW(s)->pending_out)  += len;
     D_RW(strm)->total_out += len;
     D_RW(strm)->avail_out -= len;
     D_RW(s)->pending      -= len;
@@ -653,7 +695,7 @@ local uInt longest_match(s, cur_match)
     IPos cur_match;                             /* current match */
 {
     unsigned chain_length = D_RO(s)->max_chain_length;/* max hash chain length */
-    register Bytef *scan = D_RO(s)->window + D_RO(s)->strstart; /* current string */
+    register Bytef *scan = D_RW(D_RW(s)->window) + D_RO(s)->strstart; /* current string */
     register Bytef *match;                      /* matched string */
     register int len;                           /* length of current match */
     int best_len = (int)D_RO(s)->prev_length;         /* best match length so far */
@@ -663,7 +705,7 @@ local uInt longest_match(s, cur_match)
     /* Stop when cur_match becomes <= limit. To simplify the code,
      * we prevent matches with the string of window index 0.
      */
-    Posf *prev = D_RO(s)->prev;
+    Posf *prev = D_RW(D_RW(s)->prev);
     uInt wmask = D_RO(s)->w_mask;
 
 #ifdef UNALIGNED_OK
@@ -674,7 +716,7 @@ local uInt longest_match(s, cur_match)
     register ush scan_start = *(ushf*)scan;
     register ush scan_end   = *(ushf*)(scan+best_len-1);
 #else
-    register Bytef *strend = D_RO(s)->window + D_RO(s)->strstart + MAX_MATCH;
+    register Bytef *strend = D_RW(D_RW(s)->window) + D_RO(s)->strstart + MAX_MATCH;
     register Byte scan_end1  = scan[best_len-1];
     register Byte scan_end   = scan[best_len];
 #endif
@@ -697,7 +739,7 @@ local uInt longest_match(s, cur_match)
 
     do {
         Assert(cur_match < D_RO(s)->strstart, "no future");
-        match = D_RW(s)->window + cur_match;
+        match = D_RW(D_RW(s)->window) + cur_match;
 
         /* Skip to next match if the match length cannot increase
          * or if the match length is less than 2.  Note that the checks below
@@ -916,10 +958,10 @@ int ZEXPORT deflate (pop, strm, flush)
                  */
                 if (flush == Z_FULL_FLUSH) {
                     /*CLEAR_HASH(s);*/             /* forget history */
-                    D_RW(s)->head[D_RO(s)->hash_size-1] = NIL;
+                    D_RW(D_RW(s)->head)[D_RO(s)->hash_size-1] = NIL;
                     //memset((Bytef *)D_RW(s)->head, 0, (unsigned)(D_RW(s)->hash_size-1)*sizeof(*D_RO(s)->head)); 
                     //zmemzero((Bytef *)s->head, (unsigned)(s->hash_size-1)*sizeof(*s->head));
-                    pmemobj_memset_persist(pop, (Bytef *)D_RW(s)->head, 0, (unsigned)(D_RW(s)->hash_size-1)*sizeof(*D_RO(s)->head));
+                    pmemobj_memset_persist(pop, (Bytef *)D_RW(D_RW(s)->head), 0, (unsigned)(D_RW(s)->hash_size-1)*sizeof(*D_RO(D_RO(s)->head)));
                     if (D_RO(s)->lookahead == 0) {
                         D_RW(s)->strstart = 0;
                         D_RW(s)->block_start = 0L;
@@ -956,7 +998,7 @@ int ZEXPORT deflate (pop, strm, flush)
  */
 #define FLUSH_BLOCK_ONLY(s, last) { \
    _tr_flush_block(pop, s, (D_RO(s)->block_start >= 0L ? \
-                   (charf *)&(D_RW(s)->window[(unsigned)D_RO(s)->block_start]) : \
+                   (charf *)&(D_RW(D_RW(s)->window)[(unsigned)D_RO(s)->block_start]) : \
                    (charf *)Z_NULL), \
                 (ulg)((long)D_RO(s)->strstart - D_RO(s)->block_start), \
                 (last)); \
@@ -1074,7 +1116,7 @@ local block_state deflate_slow(pop, s, flush)
              * is longer, truncate the previous match to a single literal.
              */
             //Tracevv((stderr,"%c", D_RO(s)->window[D_RO(s)->strstart-1]));
-            _tr_tally_lit(s, D_RW(s)->window[D_RO(s)->strstart-1], bflush);
+            _tr_tally_lit(s, D_RW(D_RW(s)->window)[D_RO(s)->strstart-1], bflush);
             if (bflush) {
                 FLUSH_BLOCK_ONLY(s, 0);
             }
@@ -1093,7 +1135,7 @@ local block_state deflate_slow(pop, s, flush)
     Assert (flush != Z_NO_FLUSH, "no flush?");
     if (D_RO(s)->match_available) {
         //Tracevv((stderr,"%c", D_RO(s)->window[D_RO(s)->strstart-1]));
-        _tr_tally_lit(s, D_RW(s)->window[D_RO(s)->strstart-1], bflush);
+        _tr_tally_lit(s, D_RW(D_RW(s)->window)[D_RO(s)->strstart-1], bflush);
         D_RW(s)->match_available = 0;
     }
     D_RW(s)->insert = D_RO(s)->strstart < MIN_MATCH-1 ? D_RO(s)->strstart : MIN_MATCH-1;
@@ -1231,10 +1273,10 @@ local block_state deflate_stored(pop, s, flush)
         _tr_stored_block(pop, s, (char *)0, 0L, last);
 
         /* Replace the lengths in the dummy stored block with len. */
-        D_RW(s)->pending_buf[D_RO(s)->pending - 4] = len;
-        D_RW(s)->pending_buf[D_RO(s)->pending - 3] = len >> 8;
-        D_RW(s)->pending_buf[D_RO(s)->pending - 2] = ~len;
-        D_RW(s)->pending_buf[D_RO(s)->pending - 1] = ~len >> 8;
+        D_RW(D_RW(s)->pending_buf)[D_RO(s)->pending - 4] = len;
+        D_RW(D_RW(s)->pending_buf)[D_RO(s)->pending - 3] = len >> 8;
+        D_RW(D_RW(s)->pending_buf)[D_RO(s)->pending - 2] = ~len;
+        D_RW(D_RW(s)->pending_buf)[D_RO(s)->pending - 1] = ~len >> 8;
 
         /* Write the stored block header bytes. */
         flush_pending(pop, D_RO(s)->strm);
@@ -1251,7 +1293,7 @@ local block_state deflate_stored(pop, s, flush)
                 left = len;
             //zmemcpy(D_RW(s)->strm->next_out, s->window + s->block_start, left);
             //memcpy(D_RW(D_RW(s)->strm)->next_out, D_RW(s)->window + D_RO(s)->block_start, left);
-            pmemobj_memcpy_persist(pop, D_RW(D_RW(s)->strm)->next_out, D_RW(s)->window + D_RO(s)->block_start, left);
+            pmemobj_memcpy_persist(pop, D_RW(D_RW(s)->strm)->next_out, &D_RW(s)->window + D_RO(s)->block_start, left);
             D_RW(D_RW(s)->strm)->next_out += left;
             D_RW(D_RW(s)->strm)->avail_out -= left;
             D_RW(D_RW(s)->strm)->total_out += left;
@@ -1284,7 +1326,7 @@ local block_state deflate_stored(pop, s, flush)
         if (used >= D_RO(s)->w_size) {    /* supplant the previous history */
             D_RW(s)->matches = 2;         /* clear hash */
             //zmemcpy(D_RW(s)->window,  D_RW(D_RO(s)->strm)->next_in - D_RO(s)->w_size, D_RO(s)->w_size);
-            memcpy(D_RW(s)->window, D_RW(D_RW(s)->strm)->next_in - D_RO(s)->w_size, D_RO(s)->w_size);
+            memcpy(D_RW(D_RW(s)->window), D_RW(D_RW(s)->strm)->next_in - D_RO(s)->w_size, D_RO(s)->w_size);
             //pmemobj_memcpy_persist(pop, D_RW(s)->window, D_RW(D_RW(s)->strm)->next_in - D_RO(s)->w_size, D_RO(s)->w_size);
             D_RW(s)->strstart = D_RO(s)->w_size;
         }
@@ -1294,13 +1336,13 @@ local block_state deflate_stored(pop, s, flush)
                 D_RW(s)->strstart -= D_RO(s)->w_size;
                 //zmemcpy(D_RW(s)->window, D_RW(s)->window + D_RO(s)->w_size, D_RO(s)->strstart);
                 //memcpy(D_RW(s)->window, D_RW(s)->window + D_RO(s)->w_size, D_RO(s)->strstart);
-                pmemobj_memcpy_persist(pop, D_RW(s)->window, D_RW(s)->window + D_RO(s)->w_size, D_RO(s)->strstart);
+                pmemobj_memcpy_persist(pop, D_RW(D_RW(s)->window), D_RW(D_RW(s)->window) + D_RO(s)->w_size, D_RO(s)->strstart);
                 if (D_RO(s)->matches < 2)
                     D_RW(s)->matches++;   /* add a pending slide_hash() */
             }
             //zmemcpy(D_RW(s)->window + D_RO(s)->strstart, s->strm->next_in - used, used);
             //memcpy(D_RW(s)->window + D_RO(s)->strstart, D_RW(D_RW(s)->strm)->next_in - used, used);
-            pmemobj_memcpy_persist(pop, D_RW(s)->window + D_RO(s)->strstart, D_RW(D_RW(s)->strm)->next_in - used, used);
+            pmemobj_memcpy_persist(pop, D_RW(D_RW(s)->window) + D_RO(s)->strstart, D_RW(D_RW(s)->strm)->next_in - used, used);
             D_RW(s)->strstart += used;
         }
         D_RW(s)->block_start = D_RO(s)->strstart;
@@ -1326,7 +1368,7 @@ local block_state deflate_stored(pop, s, flush)
         D_RW(s)->strstart -= D_RO(s)->w_size;
         //zmemcpy(D_RW(s)->window, D_RW(s)->window + D_RO(s)->w_size, D_RO(s)->strstart);
         //memcpy(D_RW(s)->window, D_RW(s)->window + D_RO(s)->w_size, D_RO(s)->strstart);
-        pmemobj_memcpy_persist(pop, D_RW(s)->window, D_RW(s)->window + D_RO(s)->w_size, D_RO(s)->strstart);
+        pmemobj_memcpy_persist(pop, D_RW(D_RW(s)->window), D_RW(D_RW(s)->window) + D_RO(s)->w_size, D_RO(s)->strstart);
         if (D_RO(s)->matches < 2)
             D_RW(s)->matches++;           /* add a pending slide_hash() */
         have += D_RO(s)->w_size;          /* more space now */
@@ -1334,7 +1376,7 @@ local block_state deflate_stored(pop, s, flush)
     if (have > D_RO(D_RO(s)->strm)->avail_in)
         have = D_RO(D_RO(s)->strm)->avail_in;
     if (have) {
-        read_buf(pop, D_RO(s)->strm, D_RO(s)->window + D_RO(s)->strstart, have);
+        read_buf(pop, D_RO(s)->strm, D_RW(D_RW(s)->window) + D_RO(s)->strstart, have);
         D_RW(s)->strstart += have;
     }
     if (D_RO(s)->high_water < D_RO(s)->strstart)
@@ -1356,7 +1398,7 @@ local block_state deflate_stored(pop, s, flush)
         len = MIN(left, have);
         last = flush == Z_FINISH && D_RO(D_RO(s)->strm)->avail_in == 0 &&
                len == left ? 1 : 0;
-        _tr_stored_block(pop, s, (charf *)D_RO(s)->window + D_RO(s)->block_start, len, last);
+        _tr_stored_block(pop, s, (charf *)D_RO(D_RO(s)->window) + D_RO(s)->block_start, len, last);
         D_RW(s)->block_start += len;
         flush_pending(pop, D_RO(s)->strm);
     }
@@ -1441,8 +1483,8 @@ local block_state deflate_fast(pop, s, flush)
             {
                 D_RW(s)->strstart += D_RO(s)->match_length;
                 D_RW(s)->match_length = 0;
-                D_RW(s)->ins_h = D_RO(s)->window[D_RO(s)->strstart];
-                UPDATE_HASH(s, D_RW(s)->ins_h, D_RO(s)->window[D_RO(s)->strstart+1]);
+                D_RW(s)->ins_h = D_RO(D_RO(s)->window)[D_RO(s)->strstart];
+                UPDATE_HASH(s, D_RW(s)->ins_h, D_RO(D_RO(s)->window)[D_RO(s)->strstart+1]);
 #if MIN_MATCH != 3
                 Call UPDATE_HASH() MIN_MATCH-3 more times
 #endif
@@ -1453,7 +1495,7 @@ local block_state deflate_fast(pop, s, flush)
         } else {
             /* No match, output a literal byte */
             //Tracevv((stderr,"%c", s->window[s->strstart]));
-            _tr_tally_lit (s, D_RO(s)->window[D_RO(s)->strstart], bflush);
+            _tr_tally_lit (s, D_RO(D_RO(s)->window)[D_RO(s)->strstart], bflush);
             D_RW(s)->lookahead--;
             D_RW(s)->strstart++;
         }
@@ -1499,10 +1541,10 @@ local block_state deflate_rle(pop, s, flush)
         /* See how many times the previous byte repeats */
         D_RW(s)->match_length = 0;
         if (D_RO(s)->lookahead >= MIN_MATCH && D_RO(s)->strstart > 0) {
-            scan = D_RO(s)->window + D_RO(s)->strstart - 1;
+            scan = D_RW(D_RW(s)->window) + D_RO(s)->strstart - 1;
             prev = *scan;
             if (prev == *++scan && prev == *++scan && prev == *++scan) {
-                strend = D_RO(s)->window + D_RO(s)->strstart + MAX_MATCH;
+                strend = D_RW(D_RW(s)->window) + D_RO(s)->strstart + MAX_MATCH;
                 do {
                 } while (prev == *++scan && prev == *++scan &&
                          prev == *++scan && prev == *++scan &&
@@ -1528,7 +1570,7 @@ local block_state deflate_rle(pop, s, flush)
         } else {
             /* No match, output a literal byte */
             //Tracevv((stderr,"%c", s->window[s->strstart]));
-            _tr_tally_lit (s, D_RO(s)->window[D_RO(s)->strstart], bflush);
+            _tr_tally_lit (s, D_RO(D_RO(s)->window)[D_RO(s)->strstart], bflush);
             D_RW(s)->lookahead--;
             D_RW(s)->strstart++;
         }
@@ -1569,7 +1611,7 @@ local block_state deflate_huff(pop, s, flush)
         /* Output a literal byte */
         D_RW(s)->match_length = 0;
         Tracevv((stderr,"%c", D_RO(s)->window[D_RO(s)->strstart]));
-        _tr_tally_lit (s, D_RO(s)->window[D_RO(s)->strstart], bflush);
+        _tr_tally_lit (s, D_RO(D_RO(s)->window)[D_RO(s)->strstart], bflush);
         D_RW(s)->lookahead--;
         D_RW(s)->strstart++;
         if (bflush) FLUSH_BLOCK(s, 0);

@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <unistd.h>
+#include "ex_common.h"
 #include "zlib.h"
 #include "deflate.h"
 //#include "deflate.c"
@@ -152,13 +153,13 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
             {
                 if(maplen < CHUNK)
                 {
-                    strncpy(D_RW(io)->in, src_pmemaddr, maplen);
+                    TX_MEMCPY(D_RW(io)->in, src_pmemaddr, maplen);
                     input_len = maplen;
                     maplen = 0;
                 }
                 else
                 {
-                    strncpy(D_RW(io)->in, src_pmemaddr, CHUNK);
+                    TX_MEMCPY(D_RW(io)->in, src_pmemaddr, CHUNK);
                     maplen -= CHUNK;
                     input_len = CHUNK;
                     src_pmemaddr += CHUNK;
@@ -373,14 +374,25 @@ int main(int argc, char **argv)
     int ret;
     char *outfile = argv[2];    /* output file path */   
 
-    /* create a memory pool */
-    PMEMobjpool *pop = pmemobj_create(argv[3], POBJ_LAYOUT_NAME(pmem_deflate), 1073741824, 0666);
-    if (pop == NULL)
+    /* create or open a memory pool */
+    PMEMobjpool *pop;
+    if(file_exists(argv[3]) != 0)
     {
-        perror("pmemobj_create");
-        return 1;
+        if((pop = pmemobj_create(argv[3], POBJ_LAYOUT_NAME(pmem_deflate), 1073741824, 0666)) == NULL)
+        {
+            perror("pmemobj_create");
+            return 1;
+        }
     }
-    
+    else
+    {
+        if((pop = pmemobj_open(argv[3], POBJ_LAYOUT_NAME(pmem_deflate))) == NULL)
+        {
+            printf("failed to open pool\n");
+            return 1;
+        }
+    }
+
     /* do compression if arguments = 4 */
     if (argc == 4 && pop != NULL)
     {

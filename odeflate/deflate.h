@@ -100,9 +100,11 @@ typedef unsigned IPos;
 struct deflate_state {
     TOID(struct z_stream) strm;      /* pointer back to this zlib stream */
     int   status;        /* as the name implies */
-    Bytef *pending_buf;  /* output still pending */
+    //Bytef *pending_buf;  /* output still pending */
+    TOID(Byte) pending_buf;
     ulg   pending_buf_size; /* size of pending_buf */
-    Bytef *pending_out;  /* next pending byte to output to the stream */
+    //Bytef *pending_out;  /* next pending byte to output to the stream */
+    TOID(Byte) pending_out;
     ulg   pending;       /* nb of bytes in the pending buffer */
     int   wrap;          /* bit 0 true for zlib, bit 1 true for gzip */
     gz_headerp  gzhead;  /* gzip header information to write */
@@ -115,8 +117,9 @@ struct deflate_state {
     uInt  w_size;        /* LZ77 window size (32K by default) */
     uInt  w_bits;        /* log2(w_size)  (8..16) */
     uInt  w_mask;        /* w_size - 1 */
-
-    Bytef *window;
+    
+    //Bytef window;
+    TOID(Byte) window;
     /* Sliding window. Input bytes are read into the second half of the window,
      * and move to the first half later to keep a dictionary of at least wSize
      * bytes. With this organization, matches are limited to a distance of
@@ -130,15 +133,16 @@ struct deflate_state {
     /* Actual size of window: 2*wSize, except when the user input buffer
      * is directly used as sliding window.
      */
-
-    Posf *prev;
+    
+    //Posf prev;
+    TOID(ush) prev;
     /* Link to older string with same hash index. To limit the size of this
      * array to 64K, this link is maintained only for the last 32K strings.
      * An index in this array is thus a window index modulo 32K.
      */
 
-    Posf *head; /* Heads of the hash chains or NIL. */
-
+    TOID(ush) head; /* Heads of the hash chains or NIL. */
+    //Posf head;
     uInt  ins_h;          /* hash index of string to be inserted */
     uInt  hash_size;      /* number of elements in hash table */
     uInt  hash_bits;      /* log2(hash_size) */
@@ -278,7 +282,7 @@ struct deflate_state {
 /* Output a byte on the stream.
  * IN assertion: there is enough room in pending_buf.
  */
-#define put_byte(s, c) {D_RW(s)->pending_buf[((D_RW(s)->pending)++)] = (Bytef)(c);}
+#define put_byte(s, c) {D_RW(D_RW(s)->pending_buf)[((D_RW(s)->pending)++)] = (Bytef)(c);}
 
 
 #define MIN_LOOKAHEAD (MAX_MATCH+MIN_MATCH+1)
