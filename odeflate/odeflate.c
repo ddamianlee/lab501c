@@ -123,14 +123,22 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
     TOID(struct myroot) root = POBJ_ROOT(pop, struct myroot);
     TOID(struct z_stream) strm;
     
-    TX_BEGIN(pop)
+    if(POBJ_ALLOC(pop, &strm, struct z_stream, sizeof(struct z_stream), NULL, NULL))
     {
-        strm = TX_NEW(struct z_stream);
-        /* allocate deflate state */
-        D_RW(strm)->zalloc = Z_NULL;
-        D_RW(strm)->zfree = Z_NULL;
-        D_RW(strm)->opaque = Z_NULL;
-    } TX_END
+        fprintf(stderr, "deflate_state alloc failed: %s\n", pmemobj_errormsg());
+        abort();
+    }
+    D_RW(strm)->zalloc = Z_NULL;
+    D_RW(strm)->zfree = Z_NULL;
+    D_RW(strm)->opaque = Z_NULL;
+    // TX_BEGIN(pop)
+    // {
+    //     strm = TX_NEW(struct z_stream);
+    //     /* allocate deflate state */
+    //     D_RW(strm)->zalloc = Z_NULL;
+    //     D_RW(strm)->zfree = Z_NULL;
+    //     D_RW(strm)->opaque = Z_NULL;
+    // } TX_END
     
     ret = deflateInit(pop, strm, level);
     if (ret != Z_OK)
