@@ -389,7 +389,7 @@ int main(int argc, char **argv)
     //         return 1;
     //     }
     // }
-    if((pop = pmemobj_create(argv[3], POBJ_LAYOUT_NAME(pmem_deflate), 3221225472, 0666)) == NULL)
+    if((pop = pmemobj_create(argv[3], POBJ_LAYOUT_NAME(pmem_deflate), 1073741824, 0666)) == NULL)
     {
         perror("pmemobj_create");
         return 1;
