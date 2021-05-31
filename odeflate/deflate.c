@@ -218,6 +218,106 @@ int ZEXPORT deflateInit2_(pop, strm, level, method, windowBits, memLevel, strate
     }
     if (windowBits == 8) windowBits = 9;  /* until 256-byte window bug fixed */
     
+    // TX_BEGIN(pop)
+    // {
+    //     /* deflate_state allocation */
+    //     TOID(struct deflate_state) s = TX_NEW(struct deflate_state);
+    //     /* We overlay pending_buf and d_buf+l_buf. This works since the average
+    //      * output size for (length,distance) codes is <= 24 bits.
+    //      */
+    //     TOID(ush) overlay;
+    //     // if(POBJ_ALLOC(pop, &s, struct deflate_state, sizeof(struct deflate_state), NULL, NULL))
+    //     // {
+    //     //     fprintf(stderr, "deflate_state alloc failed: %s\n", pmemobj_errormsg());
+    //     //     abort();
+    //     // }
+        
+    //     D_RW(strm)->state = s;
+    //     D_RW(s)->strm = strm;
+    //     D_RW(s)->status = INIT_STATE;     /* to pass state test in deflateReset() */
+
+    //     D_RW(s)->wrap = wrap;
+    //     D_RW(s)->gzhead = Z_NULL;
+    //     D_RW(s)->w_bits = (uInt)windowBits;
+    //     D_RW(s)->w_size = 1 << D_RO(s)->w_bits;
+    //     D_RW(s)->w_mask = D_RO(s)->w_size - 1;
+
+    //     D_RW(s)->hash_bits = (uInt)memLevel + 7;
+    //     D_RW(s)->hash_size = 1 << D_RO(s)->hash_bits;
+    //     D_RW(s)->hash_mask = D_RO(s)->hash_size - 1;
+    //     D_RW(s)->hash_shift =  ((D_RO(s)->hash_bits+MIN_MATCH-1)/MIN_MATCH);
+
+    //     // D_RW(s)->window = (Bytef *) ZALLOC(D_RO(strm), D_RO(s)->w_size, 2*sizeof(Byte));
+    //     // D_RW(s)->prev   = (Posf *)  ZALLOC(D_RO(strm), D_RO(s)->w_size, sizeof(Pos));
+    //     // D_RW(s)->head   = (Posf *)  ZALLOC(D_RO(strm), D_RO(s)->hash_size, sizeof(Pos));
+        
+    //     D_RW(s)->high_water = 0;      /* nothing written to s->window yet */
+    //     D_RW(s)->lit_bufsize = 1 << (memLevel + 6); /* 16K elements by default */
+
+
+    //     D_RW(s)->window.oid = pmemobj_tx_alloc(D_RO(s)->w_size * (2*sizeof(Byte)), TOID_TYPE_NUM(Byte));
+    //     D_RW(s)->prev.oid = pmemobj_tx_alloc(D_RO(s)->w_size * sizeof(Pos), TOID_TYPE_NUM(ush));
+    //     D_RW(s)->head.oid = pmemobj_tx_alloc(D_RO(s)->hash_size * sizeof(Pos), TOID_TYPE_NUM(Byte));
+    //     // if(sizeof(uInt) > 2)
+    //     // {
+    //     //     if((POBJ_ALLOC(pop, &D_RW(s)->window, Byte, D_RO(s)->w_size * (2*sizeof(Byte)), NULL, NULL)) || 
+    //     //     (POBJ_ALLOC(pop, &D_RW(s)->prev, ush, D_RO(s)->w_size * sizeof(Pos), NULL, NULL)) || 
+    //     //     (POBJ_ALLOC(pop, &D_RW(s)->head, ush, D_RO(s)->hash_size * sizeof(Pos), NULL, NULL)))
+    //     //     {
+    //     //         fprintf(stderr, "deflate_state alloc failed: %s\n", pmemobj_errormsg());
+    //     //         abort();
+    //     //     }
+    //     //     pmemobj_persist(pop, D_RW(D_RW(s)->window), sizeof(*D_RW(D_RW(s)->window)));
+    //     //     pmemobj_persist(pop, D_RW(D_RW(s)->prev), sizeof(*D_RW(D_RW(s)->prev)));
+    //     //     pmemobj_persist(pop, D_RW(D_RW(s)->head), sizeof(*D_RW(D_RW(s)->head)));
+            
+    //     // }
+    //     // else
+    //     // {
+    //     //     if((POBJ_ZALLOC(pop, &D_RW(s)->window, Byte, D_RO(s)->w_size * (2*sizeof(Byte)))) || 
+    //     //     (POBJ_ZALLOC(pop, &D_RW(s)->prev, ush, D_RO(s)->w_size * sizeof(Pos))) || 
+    //     //     (POBJ_ZALLOC(pop, &D_RW(s)->head, ush, D_RO(s)->hash_size * sizeof(Pos))) ||
+    //     //     (POBJ_ZALLOC(pop, &overlay, ush, D_RO(s)->lit_bufsize * (sizeof(ush)+2))))
+    //     //     {
+    //     //         fprintf(stderr, "deflate_state alloc failed: %s\n", pmemobj_errormsg());
+    //     //         abort();
+    //     //     }
+    //     //     pmemobj_persist(pop, D_RW(D_RW(s)->window), sizeof(*D_RW(D_RW(s)->window)));
+    //     //     pmemobj_persist(pop, D_RW(D_RW(s)->prev), sizeof(*D_RW(D_RW(s)->prev)));
+    //     //     pmemobj_persist(pop, D_RW(D_RW(s)->head), sizeof(*D_RW(D_RW(s)->head)));     
+    //     // }
+        
+    //     //POBJ_ALLOC(pop, &overlay, ush, D_RO(s)->lit_bufsize * (sizeof(ush)+2), NULL, NULL);
+    //     //pmemobj_persist(pop, D_RW(overlay), sizeof(*D_RW(overlay)));
+    //     overlay.oid = pmemobj_tx_alloc(D_RO(s)->lit_bufsize * (sizeof(ush)+2), TOID_TYPE_NUM(ush));
+    //     //POBJ_ALLOC(pop, &D_RW(s)->pending_buf, Byte, D_RO(s)->lit_bufsize * (sizeof(ush)+2), NULL, NULL);
+    //     //pmemobj_persist(pop, D_RW(D_RW(s)->pending_buf), sizeof(*(D_RW(D_RW(s)->pending_buf))));
+    //     D_RW(s)->pending_buf.oid = pmemobj_tx_alloc(D_RO(s)->lit_bufsize * (sizeof(ush)+2), TOID_TYPE_NUM(Byte));
+    //     //overlay = (ushf *) ZALLOC(D_RO(strm), D_RO(s)->lit_bufsize, sizeof(ush)+2);
+        
+    //     //D_RW(s)->pending_buf = /*(uchf *)D_RW(overlay)*/ overlay;
+    //     D_RW(s)->pending_buf_size = (ulg)D_RO(s)->lit_bufsize * (sizeof(ush)+2L);
+
+
+    //     if (D_RO(D_RO(s)->window) == Z_NULL || D_RO(D_RO(s)->prev) == Z_NULL || D_RO(D_RO(s)->head) == Z_NULL ||
+    //         D_RO(D_RO(s)->pending_buf) == Z_NULL) 
+    //     {
+    //         D_RW(s)->status = FINISH_STATE;
+    //         D_RW(strm)->msg = ERR_MSG(Z_MEM_ERROR);
+    //         deflateEnd (pop, strm);
+    //         return Z_MEM_ERROR;
+    //     }
+    //     D_RW(s)->d_buf = D_RW(overlay) + D_RO(s)->lit_bufsize/sizeof(ush);
+    //     D_RW(s)->l_buf = D_RW(D_RW(s)->pending_buf) + (1+sizeof(ush))*(D_RO(s)->lit_bufsize);
+
+    //     D_RW(s)->level = level;
+    //     D_RW(s)->strategy = strategy;
+    //     D_RW(s)->method = (Byte)method;
+    // } TX_END
+   
+
+
+
     /* deflate_state allocation */
     TOID(struct deflate_state) s;
     if(POBJ_ALLOC(pop, &s, struct deflate_state, sizeof(struct deflate_state), NULL, NULL))
@@ -313,10 +413,9 @@ int ZEXPORT deflateReset (pop, strm)
     TOID(struct z_stream) strm;
 {
     int ret;
-
     ret = deflateResetKeep(strm);
     if (ret == Z_OK)
-        lm_init(pop, D_RW(strm)->state);
+        lm_init(pop, D_RO(strm)->state);
     return ret;
 }
 /* ========================================================================= */
@@ -335,6 +434,9 @@ int ZEXPORT deflateResetKeep (strm)
 
     //s = (deflate_state *)strm->state;
     s = D_RO(strm)->state;
+    
+
+
     D_RW(s)->pending = 0;
     D_RW(s)->pending_out = D_RW(s)->pending_buf;
 
@@ -346,7 +448,6 @@ int ZEXPORT deflateResetKeep (strm)
     D_RW(s)->last_flush = Z_NO_FLUSH;
 
     _tr_init(s);
-    
     return Z_OK;
 }
 /* ========================================================================= */
@@ -354,33 +455,66 @@ int ZEXPORT deflateEnd (strm)
     TOID(struct z_stream) strm;
 {
     int status;
+    
     TOID(struct deflate_state) s = D_RW(strm)->state;
     if (deflateStateCheck(strm)) return Z_STREAM_ERROR;
 
     status = D_RO(D_RO(strm)->state)->status;
-    /* Deallocate in reverse order of allocations: */
-    //TRY_FREE(strm, strm->state->pending_buf);
-    //free(D_RW(D_RW(strm)->state)->pending_buf);
-    POBJ_FREE(&D_RO(s)->pending_buf);
+    //TX_BEGIN(pop)
+    //{
+        
+        /* Deallocate in reverse order of allocations: */
+        //TRY_FREE(strm, strm->state->pending_buf);
+        //free(D_RW(D_RW(strm)->state)->pending_buf);
+        POBJ_FREE(&D_RO(s)->pending_buf);
+        //TX_FREE(D_RO(s)->pending_buf);
+        //TRY_FREE(strm, strm->state->head);
+        //free(D_RW(D_RW(strm)->state)->head);
+        POBJ_FREE(&D_RO(s)->head);
+        //TX_FREE(D_RO(s)->head);
+        
+        //TRY_FREE(strm, strm->state->prev);
+        //free(D_RW(D_RW(strm)->state)->prev);
+        POBJ_FREE(&D_RO(s)->prev);
+        //TX_FREE(D_RO(s)->prev);
+        
+        //TRY_FREE(strm, strm->state->window);
+        //free(D_RW(D_RW(strm)->state)->window);
+        POBJ_FREE(&D_RO(s)->window);
+        //TX_FREE(D_RO(s)->window);
+
+        //ZFREE(strm, strm->state);
+        POBJ_FREE(&D_RW(strm)->state);
+        //D_RW(strm)->state = NULL;
+        //TX_FREE(D_RO(strm)->state);
+    //}TX_END
+    // TOID(struct deflate_state) s = D_RW(strm)->state;
+    // if (deflateStateCheck(strm)) return Z_STREAM_ERROR;
+
+    // status = D_RO(D_RO(strm)->state)->status;
+    // /* Deallocate in reverse order of allocations: */
+    // //TRY_FREE(strm, strm->state->pending_buf);
+    // //free(D_RW(D_RW(strm)->state)->pending_buf);
+    // POBJ_FREE(&D_RO(s)->pending_buf);
     
-    //TRY_FREE(strm, strm->state->head);
-    //free(D_RW(D_RW(strm)->state)->head);
-    POBJ_FREE(&D_RO(s)->head);
+    // //TRY_FREE(strm, strm->state->head);
+    // //free(D_RW(D_RW(strm)->state)->head);
+    // POBJ_FREE(&D_RO(s)->head);
     
     
-    //TRY_FREE(strm, strm->state->prev);
-    //free(D_RW(D_RW(strm)->state)->prev);
-    POBJ_FREE(&D_RO(s)->prev);
+    // //TRY_FREE(strm, strm->state->prev);
+    // //free(D_RW(D_RW(strm)->state)->prev);
+    // POBJ_FREE(&D_RO(s)->prev);
     
     
-    //TRY_FREE(strm, strm->state->window);
-    //free(D_RW(D_RW(strm)->state)->window);
-    POBJ_FREE(&D_RO(s)->window);
+    // //TRY_FREE(strm, strm->state->window);
+    // //free(D_RW(D_RW(strm)->state)->window);
+    // POBJ_FREE(&D_RO(s)->window);
     
 
-    //ZFREE(strm, strm->state);
-    POBJ_FREE(&D_RW(strm)->state);
-    //D_RW(strm)->state = NULL;
+    // //ZFREE(strm, strm->state);
+    // POBJ_FREE(&D_RW(strm)->state);
+    // //D_RW(strm)->state = NULL;
 
     return status == BUSY_STATE ? Z_DATA_ERROR : Z_OK;
 }
@@ -397,7 +531,7 @@ local void lm_init (pop, s)
     D_RW(D_RW(s)->head)[D_RO(s)->hash_size-1] = NIL; 
     //zmemzero((Bytef *)s->head, (unsigned)(s->hash_size-1)*sizeof(*s->head));
     //memset((Bytef *)D_RW(s)->head, 0, (unsigned)(D_RO(s)->hash_size-1)*sizeof(*D_RO(s)->head));
-    pmemobj_memset_persist(pop, (Bytef *)&D_RO(s)->head, 0, (unsigned)(D_RW(s)->hash_size-1)*sizeof(*D_RO(D_RO(s)->head)));
+    pmemobj_memset_persist(pop, (Bytef *)D_RW(D_RW(s)->head), 0, (unsigned)(D_RW(s)->hash_size-1)*sizeof(*D_RO(D_RO(s)->head)));
 
     /* Set the default configuration parameters:
      */
@@ -414,6 +548,7 @@ local void lm_init (pop, s)
     D_RW(s)->match_available = 0;
     D_RW(s)->ins_h = 0;
 
+    //pmemobj_persist(pop, D_RW(s), sizeof(*D_RW(s)));
 }
 /* ===========================================================================
  * Slide the hash table when sliding the window down (could be avoided with 32
@@ -428,14 +563,14 @@ local void slide_hash(s)
     uInt wsize = D_RO(s)->w_size;
 
     n = D_RO(s)->hash_size;
-    p = &(D_RW(D_RW(s)->head)[n]);
+    p = &D_RW(D_RW(s)->head)[n];
     do {
         m = *--p;
         *p = (Pos)(m >= wsize ? m - wsize : NIL);
     } while (--n);
     n = wsize;
 #ifndef FASTEST
-    p = &(D_RW(D_RW(s)->prev)[n]);
+    p = &D_RW(D_RW(s)->prev)[n];
     do {
         m = *--p;
         *p = (Pos)(m >= wsize ? m - wsize : NIL);
@@ -522,7 +657,7 @@ local void fill_window(pop, s)
         if (D_RO(s)->strstart >= wsize+MAX_DIST(s)) {
 
             //memcpy(D_RW(s)->window, D_RW(s)->window+wsize, (unsigned)wsize - more);
-            pmemobj_memcpy_persist(pop, &D_RW(s)->window, &D_RO(s)->window + wsize, (unsigned)wsize - more);
+            pmemobj_memcpy_persist(pop, D_RW(D_RW(s)->window), D_RO(D_RO(s)->window) + wsize, (unsigned)wsize - more);
             D_RW(s)->match_start -= wsize;
             D_RW(s)->strstart    -= wsize; /* we now have strstart >= MAX_DIST */
             D_RW(s)->block_start -= (long) wsize;
@@ -904,7 +1039,6 @@ int ZEXPORT deflate (pop, strm, flush)
     if (D_RO(strm)->avail_in != 0 || D_RO(s)->lookahead != 0 ||
         (flush != Z_NO_FLUSH && D_RO(s)->status != FINISH_STATE)) {
         block_state bstate;
-        
         bstate = D_RO(s)->level == 0 ? deflate_stored(pop, s, flush) :
                  D_RO(s)->strategy == Z_HUFFMAN_ONLY ? deflate_huff(pop, s, flush) :
                  D_RO(s)->strategy == Z_RLE ? deflate_rle(pop, s, flush) :
@@ -1271,7 +1405,7 @@ local block_state deflate_stored(pop, s, flush)
                 left = len;
             //zmemcpy(D_RW(s)->strm->next_out, s->window + s->block_start, left);
             //memcpy(D_RW(D_RW(s)->strm)->next_out, D_RW(s)->window + D_RO(s)->block_start, left);
-            pmemobj_memcpy_persist(pop, D_RW(D_RW(s)->strm)->next_out, &D_RW(s)->window + D_RO(s)->block_start, left);
+            pmemobj_memcpy_persist(pop, D_RW(D_RW(s)->strm)->next_out, D_RW(D_RW(s)->window) + D_RO(s)->block_start, left);
             D_RW(D_RW(s)->strm)->next_out += left;
             D_RW(D_RW(s)->strm)->avail_out -= left;
             D_RW(D_RW(s)->strm)->total_out += left;

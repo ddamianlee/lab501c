@@ -121,24 +121,17 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
 
     /* set the root */
     TOID(struct myroot) root = POBJ_ROOT(pop, struct myroot);
-    TOID(struct z_stream) strm;
+    TOID(struct z_stream) strm = D_RO(root)->strm;
     
-    if(POBJ_ALLOC(pop, &strm, struct z_stream, sizeof(struct z_stream), NULL, NULL))
+
+    TX_BEGIN(pop)
     {
-        fprintf(stderr, "deflate_state alloc failed: %s\n", pmemobj_errormsg());
-        abort();
-    }
-    D_RW(strm)->zalloc = Z_NULL;
-    D_RW(strm)->zfree = Z_NULL;
-    D_RW(strm)->opaque = Z_NULL;
-    // TX_BEGIN(pop)
-    // {
-    //     strm = TX_NEW(struct z_stream);
-    //     /* allocate deflate state */
-    //     D_RW(strm)->zalloc = Z_NULL;
-    //     D_RW(strm)->zfree = Z_NULL;
-    //     D_RW(strm)->opaque = Z_NULL;
-    // } TX_END
+        strm = TX_NEW(struct z_stream);
+        /* allocate deflate state */
+        D_RW(strm)->zalloc = Z_NULL;
+        D_RW(strm)->zfree = Z_NULL;
+        D_RW(strm)->opaque = Z_NULL;
+    } TX_END
     
     ret = deflateInit(pop, strm, level);
     if (ret != Z_OK)
@@ -148,8 +141,7 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
     TX_BEGIN(pop)
     {
         TX_ADD(root);
-        TOID(struct InOutbuffer) io = TX_NEW(struct InOutbuffer);
-        
+        TOID(struct InOutbuffer) io = TX_NEW(struct InOutbuffer);   
         /* compress until end of file */
         do 
         {
@@ -180,12 +172,14 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
             {
                 D_RW(strm)->avail_out = CHUNK;
                 D_RW(strm)->next_out = D_RW(io)->out;
+                int l = D_RO(D_RO(strm)->state)->level;
+                printf("before deflate level = %d\n", l);
                 ret = deflate(pop, strm, flush);    /* no bad return value */
                 assert(ret != Z_STREAM_ERROR);  /* state not clobbered */
                 D_RW(io)->have = CHUNK - D_RO(strm)->avail_out;
                 // for(int q = 0; q < D_RO(io)->have; q++)
-                //     printf("%c", D_RO(io)->out[q]);
-                //printf("\n\nprint done");
+                //      printf("%c", D_RO(io)->out[q]);
+                // printf("\n\nprint done");
                 if (fwrite(D_RO(io)->out, 1, D_RO(io)->have, fp) != D_RO(io)->have) 
                 {
                     (void)deflateEnd(strm);
@@ -381,21 +375,26 @@ int main(int argc, char **argv)
 
     /* create or open a memory pool */
     PMEMobjpool *pop;
-    if(file_exists(argv[3]) != 0)
+    // if(file_exists(argv[3]) != 0)
+    // {
+    //     if((pop = pmemobj_create(argv[3], POBJ_LAYOUT_NAME(pmem_deflate), 3221225472, 0666)) == NULL)
+    //     {
+    //         perror("pmemobj_create");
+    //         return 1;
+    //     }
+    // }
+    // else
+    // {
+    //     if((pop = pmemobj_open(argv[3], POBJ_LAYOUT_NAME(pmem_deflate))) == NULL)
+    //     {
+    //         printf("failed to open pool\n");
+    //         return 1;
+    //     }
+    // }
+    if((pop = pmemobj_create(argv[3], POBJ_LAYOUT_NAME(pmem_deflate), 3221225472, 0666)) == NULL)
     {
-        if((pop = pmemobj_create(argv[3], POBJ_LAYOUT_NAME(pmem_deflate), 1073741824, 0666)) == NULL)
-        {
-            perror("pmemobj_create");
-            return 1;
-        }
-    }
-    else
-    {
-        if((pop = pmemobj_open(argv[3], POBJ_LAYOUT_NAME(pmem_deflate))) == NULL)
-        {
-            printf("failed to open pool\n");
-            return 1;
-        }
+        perror("pmemobj_create");
+        return 1;
     }
 
     /* do compression if arguments = 4 */
