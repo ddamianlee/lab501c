@@ -172,8 +172,6 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
             {
                 D_RW(strm)->avail_out = CHUNK;
                 D_RW(strm)->next_out = D_RW(io)->out;
-                int l = D_RO(D_RO(strm)->state)->level;
-                printf("before deflate level = %d\n", l);
                 ret = deflate(pop, strm, flush);    /* no bad return value */
                 assert(ret != Z_STREAM_ERROR);  /* state not clobbered */
                 D_RW(io)->have = CHUNK - D_RO(strm)->avail_out;
