@@ -122,16 +122,7 @@ local const config configuration_table[10] = {
 //     pmemobj_memset_persist(pop, (Bytef *)D_RW(s)->head, 0, (unsigned)(D_RW(s)->hash_size-1)*sizeof(D_RO(s)->head));
 
 
-// static int deflate_alloc(PMEMobjpool *pop, void *ptr, void *arg)
-// {
-//     struct deflate_state *s = (struct deflate_state *)ptr;
-//     pmemobj_memset_persist(pop, s->window, 0, s->w_size * (2*sizeof(Byte)));
-//     pmemobj_memset_persist(pop, s->prev, 0, s->w_size * sizeof(Pos));
-//     pmemobj_memset_persist(pop, s->prev, 0, s->hash_size * sizeof(Pos));
-//     pmemobj_persist(pop, &s, sizeof(*s));
 
-//     return 0;
-// }
 /* =========================================================================
  * Check for a valid deflate stream state. Return 0 if ok, 1 if not.
  */
@@ -191,9 +182,6 @@ int ZEXPORT deflateInit2_(pop, strm, level, method, windowBits, memLevel, strate
     /* We overlay pending_buf and d_buf+l_buf. This works since the average
      * output size for (length,distance) codes is <= 24 bits.
      */
-    //ushf *overlay;
-
-
     TOID(ush) overlay;
 
     if (version == Z_NULL || version[0] != my_version[0] ||
@@ -260,16 +248,6 @@ int ZEXPORT deflateInit2_(pop, strm, level, method, windowBits, memLevel, strate
     D_RW(s)->high_water = 0;      /* nothing written to s->window yet */
     D_RW(s)->lit_bufsize = 1 << (memLevel + 6); /* 16K elements by default */
 
-//     if((pmemobj_alloc(pop, D_RW(s)->window, D_RO(s)->w_size * (2*sizeof(Byte)), TOID_TYPE_NUM(struct deflate_state), NULL, NULL)) || 
-//         (pmemobj_alloc(pop, D_RW(s)->prev, D_RO(s)->w_size * sizeof(Pos), TOID_TYPE_NUM(struct deflate_state), NULL, NULL)) ||  
-//         (pmemobj_alloc(pop, D_RW(s)->head, D_RO(s)->hash_size * sizeof(Pos), TOID_TYPE_NUM(struct deflate_state), NULL, NULL)))
-//    {
-//         fprintf(stderr, "deflate_state alloc failed: %s\n", pmemobj_errormsg());
-//         abort();
-//    } 
-//     pmemobj_persist(pop, D_RW(s)->window, sizeof(D_RW(s)->window));
-//     pmemobj_persist(pop, D_RW(s)->prev, sizeof(D_RW(s)->prev));
-//     pmemobj_persist(pop, D_RW(s)->head, sizeof(D_RW(s)->head));
     if(sizeof(uInt) > 2)
     {
         if((POBJ_ALLOC(pop, &D_RW(s)->window, Byte, D_RO(s)->w_size * (2*sizeof(Byte)), NULL, NULL)) || 
@@ -309,7 +287,7 @@ int ZEXPORT deflateInit2_(pop, strm, level, method, windowBits, memLevel, strate
     D_RW(s)->pending_buf_size = (ulg)D_RO(s)->lit_bufsize * (sizeof(ush)+2L);
 
 
-    if (&D_RO(s)->window == Z_NULL || &D_RO(s)->prev == Z_NULL || &D_RO(s)->head == Z_NULL ||
+    if (D_RO(D_RO(s)->window) == Z_NULL || D_RO(D_RO(s)->prev) == Z_NULL || D_RO(D_RO(s)->head) == Z_NULL ||
           D_RO(D_RO(s)->pending_buf) == Z_NULL) 
     {
         D_RW(s)->status = FINISH_STATE;
@@ -368,7 +346,7 @@ int ZEXPORT deflateResetKeep (strm)
     D_RW(s)->last_flush = Z_NO_FLUSH;
 
     _tr_init(s);
-
+    
     return Z_OK;
 }
 /* ========================================================================= */
@@ -477,7 +455,7 @@ local void slide_hash(s)
 local unsigned read_buf(pop, strm, buf, size)
     PMEMobjpool *pop;
     TOID(struct z_stream) strm;
-    Byte* buf;
+    Byte *buf;
     unsigned size;
 {
     unsigned len = D_RO(strm)->avail_in;

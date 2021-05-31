@@ -132,9 +132,6 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
         D_RW(strm)->opaque = Z_NULL;
     } TX_END
     
-    
-    //pmemobj_persist(pop, &strm, sizeof(strm));
-
     ret = deflateInit(pop, strm, level);
     if (ret != Z_OK)
         return ret;
