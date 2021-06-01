@@ -413,13 +413,14 @@ int ZEXPORT deflateReset (pop, strm)
     TOID(struct z_stream) strm;
 {
     int ret;
-    ret = deflateResetKeep(strm);
+    ret = deflateResetKeep(pop, strm);
     if (ret == Z_OK)
         lm_init(pop, D_RO(strm)->state);
     return ret;
 }
 /* ========================================================================= */
-int ZEXPORT deflateResetKeep (strm)
+int ZEXPORT deflateResetKeep (pop, strm)
+    PMEMobjpool *pop;
     TOID(struct z_stream) strm;
 {
     TOID(struct deflate_state) s;
@@ -447,7 +448,7 @@ int ZEXPORT deflateResetKeep (strm)
     D_RW(strm)->adler = adler32(0L, Z_NULL, 0);
     D_RW(s)->last_flush = Z_NO_FLUSH;
 
-    _tr_init(s);
+    _tr_init(pop, s);
     return Z_OK;
 }
 /* ========================================================================= */
