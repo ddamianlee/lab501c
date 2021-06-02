@@ -117,7 +117,6 @@ local int base_dist[D_CODES];
 
 struct static_tree_desc {
     const struct ct_data *static_tree;  /* static tree or NULL */
-    //TOID(struct ct_data) static_tree;
     const intf *extra_bits;      /* extra bits for each code or NULL */
     int     extra_base;          /* base index for extra_bits */
     int     elems;               /* max number of elements in the tree */
@@ -319,34 +318,28 @@ local void tr_static_init(pop)
 #  endif
 #endif /* defined(GEN_TREES_H) || !defined(STDC) */
 
-//POBJ_ALLOC(pop, &D_RW(static_l_desc)->static_tree, struct ct_data, L_CODES+2*sizeof(struct ct_data), NULL, NULL);
-POBJ_ALLOC(pop, &static_l_desc, struct static_tree_desc, sizeof(struct static_tree_desc), NULL, NULL);
 /* static literal tree description */
+POBJ_ALLOC(pop, &static_l_desc, struct static_tree_desc, sizeof(struct static_tree_desc), NULL, NULL);
 D_RW(static_l_desc)->max_length = MAX_BITS;
 D_RW(static_l_desc)->elems = L_CODES;
 D_RW(static_l_desc)->extra_base = LITERALS + 1;
 D_RW(static_l_desc)->extra_bits = extra_lbits;
-//*D_RW(D_RW(static_l_desc)->static_tree) = *static_ltree;
 D_RW(static_l_desc)->static_tree = static_ltree;
 
-//POBJ_ALLOC(pop, &D_RW(static_d_desc)->static_tree, struct ct_data, sizeof(struct ct_data), NULL, NULL);
-POBJ_ALLOC(pop, &static_d_desc, struct static_tree_desc, sizeof(struct static_tree_desc), NULL, NULL);
 /* static distance tree description */
+POBJ_ALLOC(pop, &static_d_desc, struct static_tree_desc, sizeof(struct static_tree_desc), NULL, NULL);
 D_RW(static_d_desc)->max_length = MAX_BITS;
 D_RW(static_d_desc)->elems = D_CODES;
 D_RW(static_d_desc)->extra_base = 0;
 D_RW(static_d_desc)->extra_bits = extra_dbits;
-//D_RW(D_RW(static_d_desc)->static_tree)[D_CODES] = *static_dtree;
 D_RW(static_d_desc)->static_tree = static_dtree;
 
-//POBJ_ALLOC(pop, &D_RW(static_bl_desc)->static_tree, struct ct_data, sizeof(struct ct_data), NULL, NULL);
-POBJ_ALLOC(pop, &static_bl_desc, struct static_tree_desc, sizeof(struct static_tree_desc), NULL, NULL);
 /* static bit length tree description */
+POBJ_ALLOC(pop, &static_bl_desc, struct static_tree_desc, sizeof(struct static_tree_desc), NULL, NULL);
 D_RW(static_bl_desc)->max_length = MAX_BL_BITS;
 D_RW(static_bl_desc)->elems = BL_CODES;
 D_RW(static_bl_desc)->extra_base = 0;
 D_RW(static_bl_desc)->extra_bits = extra_blbits;
-//*D_RW(D_RW(static_bl_desc)->static_tree) = *(struct ct_data*)0;
 D_RW(static_bl_desc)->static_tree = (struct ct_data*)0;
 }
 
@@ -421,29 +414,27 @@ void ZLIB_INTERNAL _tr_init(pop, s)
 {
     tr_static_init(pop);
 
+    /* dynamic literal tree */
     POBJ_ALLOC(pop, &D_RW(s)->dyn_ltree, struct ct_data, sizeof(D_RW(s)->dyn_ltree), NULL, NULL);
     POBJ_ALLOC(pop, &D_RW(s)->l_desc, struct tree_desc, sizeof(struct tree_desc), NULL, NULL);
 
     D_RW(D_RW(s)->l_desc)->dyn_tree = *D_RW(s)->dyn_ltree;
     D_RW(D_RW(s)->l_desc)->stat_desc = D_RO(static_l_desc);
-    //D_RW(s)->l_desc.dyn_tree = D_RW(s)->dyn_ltree;
-    //D_RW(s)->l_desc.stat_desc = &static_l_desc;
-    
+
+    /* dynamic distance tree */
     POBJ_ALLOC(pop, &D_RW(s)->dyn_dtree, struct ct_data, sizeof(D_RW(s)->dyn_dtree), NULL, NULL);
     POBJ_ALLOC(pop, &D_RW(s)->d_desc, struct tree_desc, sizeof(struct tree_desc), NULL, NULL);
 
     D_RW(D_RW(s)->d_desc)->dyn_tree = *D_RW(s)->dyn_dtree;
     D_RW(D_RW(s)->d_desc)->stat_desc = D_RO(static_d_desc);
-    //D_RW(s)->d_desc.dyn_tree = D_RW(s)->dyn_dtree;
-    //D_RW(s)->d_desc.stat_desc = &static_d_desc;
-    
+
+    /* bit length tree */
     POBJ_ALLOC(pop, &D_RW(s)->bl_tree, struct ct_data, sizeof(D_RW(s)->bl_tree), NULL, NULL);
     POBJ_ALLOC(pop, &D_RW(s)->bl_desc, struct tree_desc, sizeof(struct tree_desc), NULL, NULL);
 
     D_RW(D_RW(s)->bl_desc)->dyn_tree = *D_RW(s)->bl_tree;
     D_RW(D_RW(s)->bl_desc)->stat_desc = D_RO(static_bl_desc);
-    //D_RW(s)->bl_desc.dyn_tree = D_RW(s)->bl_tree;
-    //D_RW(s)->bl_desc.stat_desc = &static_bl_desc;
+
 
     D_RW(s)->bi_buf = 0;
     D_RW(s)->bi_valid = 0;
@@ -546,7 +537,6 @@ local void gen_bitlen(s, desc)
     TOID(struct ct_data) tree = D_RW(desc)->dyn_tree;
     int max_code         = D_RO(desc)->max_code;
     const struct ct_data *stree = D_RO(desc)->stat_desc->static_tree;
-    //TOID(struct ct_data) stree = D_RO(desc)->stat_desc->static_tree;
     const intf *extra    = D_RO(desc)->stat_desc->extra_bits;
     int base             = D_RO(desc)->stat_desc->extra_base;
     int max_length       = D_RO(desc)->stat_desc->max_length;
@@ -672,14 +662,11 @@ local void gen_codes (tree, max_code, bl_count)
 local void build_tree(pop, s, desc)
     PMEMobjpool *pop;
     TOID(struct deflate_state) s;
-    TOID(struct tree_desc) desc;
-    //struct tree_desc *desc; /* the tree descriptor */
+    TOID(struct tree_desc) desc;  /* the tree descriptor */
 {
-    //struct ct_data *tree         = desc->dyn_tree;
-    //const struct ct_data *stree  = desc->stat_desc->static_tree;
+
     TOID(struct ct_data) tree = D_RW(desc)->dyn_tree;
     const struct ct_data *stree = D_RO(desc)->stat_desc->static_tree;
-    //TOID(struct ct_data) stree = D_RO(desc)->stat_desc->static_tree;
     int elems             = D_RO(desc)->stat_desc->elems;
     int n, m;          /* iterate over heap elements */
     int max_code = -1; /* largest code with non zero frequency */
@@ -749,7 +736,6 @@ local void build_tree(pop, s, desc)
 
     D_RW(s)->heap[--(D_RW(s)->heap_max)] = D_RO(s)->heap[SMALLEST];
 
-    //pmemobj_persist(pop, D_RW(desc), sizeof(*D_RW(desc)));
     /* At this point, the fields freq and dad are set. We can now
      * generate the bit lengths.
      */
@@ -871,9 +857,7 @@ local int build_bl_tree(pop, s)
 
     /* Build the bit length tree: */
     build_tree(pop, s, D_RW(s)->bl_desc);
-    //gen_bitlen(s, D_RW(s)->bl_desc);
-    //gen_codes (D_RW(D_RW(s)->bl_desc)->dyn_tree, D_RO(D_RO(s)->bl_desc)->max_code, D_RW(s)->bl_count);
-    //gen_codes (D_RW(s)->dyn_ltree, max_code, D_RW(s)->bl_count);
+
     /* opt_len now includes the length of the tree representations, except
      * the lengths of the bit lengths codes and the 5+5+4 bits for the counts.
      */
@@ -938,8 +922,6 @@ void ZLIB_INTERNAL _tr_stored_block(pop, s, buf, stored_len, last)
     bi_windup(s);        /* align on byte boundary */
     put_short(s, (ush)stored_len);
     put_short(s, (ush)~stored_len);
-    //zmemcpy(s->pending_buf + s->pending, (Bytef *)buf, stored_len);
-    //memcpy(D_RW(s)->pending_buf + D_RO(s)->pending, (Bytef *)buf, stored_len);
     pmemobj_memcpy_persist(pop, D_RW(D_RW(s)->pending_buf) + D_RO(s)->pending, (Bytef *)buf, stored_len);
     D_RW(s)->pending += stored_len;
 #ifdef ZLIB_DEBUG
@@ -997,19 +979,11 @@ void ZLIB_INTERNAL _tr_flush_block(pop, s, buf, stored_len, last)
             D_RW(D_RW(s)->strm)->data_type = detect_data_type(s);
 
         /* Construct the literal and distance trees */
-        build_tree(pop, s, D_RW(s)->l_desc);
-        //printf("break point");
-        //gen_bitlen(s, D_RW(s)->l_desc);
-        //gen_codes (D_RW(D_RW(s)->l_desc)->dyn_tree, D_RO(D_RO(s)->l_desc)->max_code, D_RW(s)->bl_count);
-        
+        build_tree(pop, s, D_RW(s)->l_desc);     
         // Tracev((stderr, "\nlit data: dyn %ld, stat %ld", s->opt_len,
         //         s->static_len));
 
         build_tree(pop, s, D_RW(s)->d_desc);
-        //printf("break point2");
-        //gen_bitlen(s, D_RW(s)->d_desc);
-        //gen_codes (D_RW(D_RW(s)->d_desc)->dyn_tree, D_RO(D_RO(s)->d_desc)->max_code, D_RW(s)->bl_count);
-        //printf("break point3");
         // Tracev((stderr, "\ndist data: dyn %ld, stat %ld", s->opt_len,
         //         s->static_len));
         /* At this point, opt_len and static_len are the total bit lengths of
@@ -1140,11 +1114,9 @@ int ZLIB_INTERNAL _tr_tally (s, dist, lc)
  * Send the block data compressed using the given Huffman trees
  */
 local void compress_block(s, ltree, dtree)
-    TOID(struct deflate_state) s;
-    //const struct ct_data *ltree; /* literal tree */
-    TOID(struct ct_data) *ltree;
-    //const struct ct_data *dtree; /* distance tree */
-    TOID(struct ct_data) *dtree;
+    TOID(struct deflate_state) s;   
+    TOID(struct ct_data) *ltree;    /* literal tree */
+    TOID(struct ct_data) *dtree;    /* distance tree */
 {
     unsigned dist;      /* distance of matched string */
     int lc;             /* match length or unmatched char (if dist == 0) */

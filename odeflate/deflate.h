@@ -99,18 +99,16 @@ typedef unsigned IPos;
 
 struct deflate_state {
     TOID(struct z_stream) strm;      /* pointer back to this zlib stream */
-    int   status;        /* as the name implies */
-    //Bytef *pending_buf;  /* output still pending */
-    TOID(Byte) pending_buf;
-    ulg   pending_buf_size; /* size of pending_buf */
-    //Bytef *pending_out;  /* next pending byte to output to the stream */
-    TOID(Byte) pending_out;
-    ulg   pending;       /* nb of bytes in the pending buffer */
-    int   wrap;          /* bit 0 true for zlib, bit 1 true for gzip */
-    gz_headerp  gzhead;  /* gzip header information to write */
-    ulg   gzindex;       /* where in extra, name, or comment */
-    Byte  method;        /* can only be DEFLATED */
-    int   last_flush;    /* value of flush param for previous deflate call */
+    int   status;                    /* as the name implies */
+    TOID(Byte) pending_buf;          /* output still pending */
+    ulg   pending_buf_size;          /* size of pending_buf */
+    TOID(Byte) pending_out;          /* next pending byte to output to the stream */
+    ulg   pending;                   /* nb of bytes in the pending buffer */
+    int   wrap;                      /* bit 0 true for zlib, bit 1 true for gzip */
+    gz_headerp  gzhead;              /* gzip header information to write */
+    ulg   gzindex;                   /* where in extra, name, or comment */
+    Byte  method;                    /* can only be DEFLATED */
+    int   last_flush;                /* value of flush param for previous deflate call */
 
                 /* used by deflate.c: */
 
@@ -118,7 +116,7 @@ struct deflate_state {
     uInt  w_bits;        /* log2(w_size)  (8..16) */
     uInt  w_mask;        /* w_size - 1 */
     
-    //Bytef window;
+
     TOID(Byte) window;
     /* Sliding window. Input bytes are read into the second half of the window,
      * and move to the first half later to keep a dictionary of at least wSize
@@ -134,7 +132,7 @@ struct deflate_state {
      * is directly used as sliding window.
      */
     
-    //Posf prev;
+
     TOID(ush) prev;
     /* Link to older string with same hash index. To limit the size of this
      * array to 64K, this link is maintained only for the last 32K strings.
@@ -142,7 +140,6 @@ struct deflate_state {
      */
 
     TOID(ush) head; /* Heads of the hash chains or NIL. */
-    //Posf head;
     uInt  ins_h;          /* hash index of string to be inserted */
     uInt  hash_size;      /* number of elements in hash table */
     uInt  hash_bits;      /* log2(hash_size) */
@@ -199,19 +196,15 @@ struct deflate_state {
 
                 /* used by trees.c: */
     /* Didn't use ct_data typedef below to suppress compiler warning */
-    //struct ct_data dyn_ltree[HEAP_SIZE];   /* literal and length tree */
-    TOID(struct ct_data) dyn_ltree[HEAP_SIZE];
-    //struct ct_data dyn_dtree[2*D_CODES+1]; /* distance tree */
-    TOID(struct ct_data) dyn_dtree[2*D_CODES+1];
-    //struct ct_data bl_tree[2*BL_CODES+1];  /* Huffman tree for bit lengths */
-    TOID(struct ct_data) bl_tree[2*BL_CODES+1];
 
-    //struct tree_desc l_desc;               /* desc. for literal tree */
-    TOID(struct tree_desc) l_desc;
-    //struct tree_desc d_desc;               /* desc. for distance tree */
-    TOID(struct tree_desc) d_desc;
-    //struct tree_desc bl_desc;              /* desc. for bit length tree */
-    TOID(struct tree_desc) bl_desc;
+    TOID(struct ct_data) dyn_ltree[HEAP_SIZE];  /* literal and length tree */
+    TOID(struct ct_data) dyn_dtree[2*D_CODES+1];/* distance tree */
+    TOID(struct ct_data) bl_tree[2*BL_CODES+1]; /* Huffman tree for bit lengths */
+
+              
+    TOID(struct tree_desc) l_desc;              /* desc. for literal tree */         
+    TOID(struct tree_desc) d_desc;              /* desc. for distance tree */             
+    TOID(struct tree_desc) bl_desc;             /* desc. for bit length tree */
 
     ush bl_count[MAX_BITS+1];
     /* number of codes at each bit length for an optimal tree */

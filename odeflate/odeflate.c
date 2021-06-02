@@ -7,10 +7,8 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <unistd.h>
-#include "ex_common.h"
 #include "zlib.h"
 #include "deflate.h"
-//#include "deflate.c"
 #include <libpmemobj.h>
 #include <libpmem.h>
 //#include "layout.h"
@@ -175,9 +173,6 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
                 ret = deflate(pop, strm, flush);    /* no bad return value */
                 assert(ret != Z_STREAM_ERROR);  /* state not clobbered */
                 D_RW(io)->have = CHUNK - D_RO(strm)->avail_out;
-                // for(int q = 0; q < D_RO(io)->have; q++)
-                //      printf("%c", D_RO(io)->out[q]);
-                // printf("\n\nprint done");
                 if (fwrite(D_RO(io)->out, 1, D_RO(io)->have, fp) != D_RO(io)->have) 
                 {
                     (void)deflateEnd(strm);
@@ -373,22 +368,6 @@ int main(int argc, char **argv)
 
     /* create or open a memory pool */
     PMEMobjpool *pop;
-    // if(file_exists(argv[3]) != 0)
-    // {
-    //     if((pop = pmemobj_create(argv[3], POBJ_LAYOUT_NAME(pmem_deflate), 3221225472, 0666)) == NULL)
-    //     {
-    //         perror("pmemobj_create");
-    //         return 1;
-    //     }
-    // }
-    // else
-    // {
-    //     if((pop = pmemobj_open(argv[3], POBJ_LAYOUT_NAME(pmem_deflate))) == NULL)
-    //     {
-    //         printf("failed to open pool\n");
-    //         return 1;
-    //     }
-    // }
     if((pop = pmemobj_create(argv[3], POBJ_LAYOUT_NAME(pmem_deflate), 1073741824, 0666)) == NULL)
     {
         perror("pmemobj_create");
