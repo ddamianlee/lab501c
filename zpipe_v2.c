@@ -20,6 +20,8 @@
 #include <time.h>
 #include <libpmem.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <fcntl.h>
 
 #if defined(MSDOS) || defined(OS2) || defined(WIN32) || defined(__CYGWIN__)
 #  include <fcntl.h>
@@ -88,7 +90,7 @@ do_copy_to_non_pmem(char *addr, FILE *fp, off_t len)
    level is supplied, Z_VERSION_ERROR if the version of zlib.h and the
    version of the library linked do not match, or Z_ERRNO if there is
    an error reading or writing the files. */
-int def(char *source, char *dest, int level)
+int def(char *source, char *dest, size_t mapped_len, int level)
 {
     int ret, flush;
     unsigned have;
@@ -100,7 +102,7 @@ int def(char *source, char *dest, int level)
     char *src_pmemaddr;         /* src file pointer */
     char *pmemaddr;             /* output file pointer */
     int is_pmem;                /* pmem_map_file arguments */
-    size_t mapped_len;
+    //size_t mapped_len;
     int i;
     size_t maplen;
 
@@ -109,12 +111,13 @@ int def(char *source, char *dest, int level)
     fp = tmpfile();
 
     /* map the src pmem file */
-    if((src_pmemaddr = pmem_map_file(source, 0, PMEM_FILE_EXCL, 0666, &mapped_len, &is_pmem)) == NULL)
-    {
-        perror("pmem_map_file");
-        exit(1);
-    }
+    // if((src_pmemaddr = pmem_map_file(source, 0, PMEM_FILE_EXCL, 0666, &mapped_len, &is_pmem)) == NULL)
+    // {
+    //     perror("pmem_map_file");
+    //     exit(1);
+    // }
     maplen = mapped_len;
+    printf("is source file pmem-file? = %d\n", is_pmem);
 
     /* allocate deflate state */
     strm.zalloc = Z_NULL;
@@ -131,16 +134,16 @@ int def(char *source, char *dest, int level)
             {
                 if(maplen < CHUNK)
                 {
-                    memcpy(in, src_pmemaddr, maplen);
+                    memcpy(in, source, maplen);
                     input_len = maplen;
                     maplen = 0;
                 }
                 else
                 {
-                    memcpy(in, src_pmemaddr, CHUNK);
+                    memcpy(in, source, CHUNK);
                     maplen -= CHUNK;
                     input_len = CHUNK;
-                    src_pmemaddr += CHUNK;
+                    source += CHUNK;
                 }    
             }
             strm.avail_in = input_len;
@@ -204,7 +207,7 @@ int def(char *source, char *dest, int level)
    invalid or incomplete, Z_VERSION_ERROR if the version of zlib.h and
    the version of the library linked do not match, or Z_ERRNO if there
    is an error reading or writing the files. */
-int inf(char *source, char *dest)
+int inf(char *source, char *dest, size_t mapped_len)
 {
     int ret;
     unsigned have;
@@ -220,16 +223,16 @@ int inf(char *source, char *dest)
     char *src_pmemaddr;         /* src file pointer */
     char *pmemaddr;             /* output file pointer */
     int is_pmem;                /* pmem_map_file arguments */
-    size_t mapped_len;
+    //size_t mapped_len;
     int i;
     size_t maplen;
 
     /* map the src pmem file */
-    if((src_pmemaddr = pmem_map_file(source, 0, PMEM_FILE_EXCL, 0666, &mapped_len, &is_pmem)) == NULL)
-    {
-        perror("pmem_map_file");
-        exit(1);
-    }
+    // if((src_pmemaddr = pmem_map_file(source, 0, PMEM_FILE_EXCL, 0666, &mapped_len, &is_pmem)) == NULL)
+    // {
+    //     perror("pmem_map_file");
+    //     exit(1);
+    // }
     printf("is source file pmem-file? = %d\n", is_pmem);
     maplen = mapped_len;
 
@@ -250,16 +253,16 @@ int inf(char *source, char *dest)
         {
             if(maplen < CHUNK)
             {
-                memcpy(in, src_pmemaddr, maplen);
+                memcpy(in, source, maplen);
                 input_len = maplen;
                 maplen = 0;
             }
             else
             {
-                memcpy(in, src_pmemaddr, CHUNK);
+                memcpy(in, source, CHUNK);
                 maplen -= CHUNK;
                 input_len = CHUNK;
-                src_pmemaddr += CHUNK;
+                source += CHUNK;
             }    
         }
         strm.avail_in = input_len;
@@ -347,29 +350,133 @@ void zerr(int ret)
 int main(int argc, char **argv)
 {
     int ret;
-    //time_t start, end;
-    //start = clock();
-
-    // /* avoid end-of-line conversions */
-    // SET_BINARY_MODE(stdin);
-    // SET_BINARY_MODE(stdout);
+    int srcfd;
+    char *startaddr;
+    struct stat stbuf;
+    char *srcpmemaddr;
+    int is_pmem;
+    char buf[4096];
+    int cc;
+    size_t mapped_len;
 
     /* do compression if arguments = 4 */
-    if (argc == 3)
+    if (argc == 4)
     {
-        ret = def(argv[1], argv[2], Z_DEFAULT_COMPRESSION);
+        if((srcfd = open(argv[1], O_RDONLY)) < 0)
+        {
+            perror(argv[1]);
+            exit(1);
+        }
+        if(fstat(srcfd, &stbuf) < 0)
+        {
+            perror("fstat");
+            exit(1);
+        }
+        if((srcpmemaddr = pmem_map_file(argv[2], stbuf.st_size, PMEM_FILE_CREATE|PMEM_FILE_EXCL, 0666, &mapped_len, &is_pmem)) == NULL)
+        {
+            perror("pmem_map_file");
+            exit(1);
+        }
+        if(is_pmem)
+        {
+            startaddr = srcpmemaddr;
+            while((cc = read(srcfd, buf, 4096)) > 0)
+            {
+                pmem_memcpy_nodrain(srcpmemaddr, buf, cc);
+                srcpmemaddr += cc;
+            }
+            if (cc < 0)
+            {
+                perror("read");
+                exit(1);
+            }
+            pmem_drain();
+        }
+        else
+        {
+            startaddr = srcpmemaddr;
+            while((cc = read(srcfd, buf, 4096)) > 0)
+            {
+                memcpy(srcpmemaddr, buf, cc);
+                srcpmemaddr += cc;
+            }
+            if (cc < 0)
+            {
+                perror("read");
+                exit(1);
+            }
+            if(pmem_msync(startaddr, stbuf.st_size) < 0)
+            {
+                perror("pmem_msync");
+                exit(1);
+            }
+
+        }
+        ret = def(startaddr, argv[3], mapped_len, Z_DEFAULT_COMPRESSION);
         if (ret != Z_OK)
             zerr(ret);
+        pmem_unmap(srcpmemaddr, mapped_len);
         return ret;
 
     }
 
     /* do decompression if -d specified */
-    else if (argc == 4 && strcmp(argv[1], "-d") == 0) 
+    else if (argc == 5 && strcmp(argv[1], "-d") == 0) 
     {
-        ret = inf(argv[2], argv[3]);
+        if((srcfd = open(argv[2], O_RDONLY)) < 0)
+        {
+            perror(argv[1]);
+            exit(1);
+        }
+        if(fstat(srcfd, &stbuf) < 0)
+        {
+            perror("fstat");
+            exit(1);
+        }
+        if((srcpmemaddr = pmem_map_file(argv[3], stbuf.st_size, PMEM_FILE_CREATE|PMEM_FILE_EXCL, 0666, &mapped_len, &is_pmem)) == NULL)
+        {
+            perror("pmem_map_file");
+            exit(1);
+        }
+        if(is_pmem)
+        {
+            startaddr = srcpmemaddr;
+            while((cc = read(srcfd, buf, 4096)) > 0)
+            {
+                pmem_memcpy_nodrain(srcpmemaddr, buf, cc);
+                srcpmemaddr += cc;
+            }
+            if (cc < 0)
+            {
+                perror("read");
+                exit(1);
+            }
+            pmem_drain();
+        }
+        else
+        {
+            startaddr = srcpmemaddr;
+            while((cc = read(srcfd, buf, 4096)) > 0)
+            {
+                memcpy(srcpmemaddr, buf, cc);
+                srcpmemaddr += cc;
+            }
+            if (cc < 0)
+            {
+                perror("read");
+                exit(1);
+            }
+            if(pmem_msync(startaddr, stbuf.st_size) < 0)
+            {
+                perror("pmem_msync");
+                exit(1);
+            }
+
+        }
+        ret = inf(startaddr, argv[4], mapped_len);
         if (ret != Z_OK)
             zerr(ret);
+        pmem_unmap(srcpmemaddr, mapped_len);
         return ret;
     }
 
