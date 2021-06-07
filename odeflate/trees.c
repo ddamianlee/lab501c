@@ -419,21 +419,21 @@ void ZLIB_INTERNAL _tr_init(pop, s)
     POBJ_ALLOC(pop, &D_RW(s)->l_desc, struct tree_desc, sizeof(struct tree_desc), NULL, NULL);
 
     D_RW(D_RW(s)->l_desc)->dyn_tree = *D_RW(s)->dyn_ltree;
-    D_RW(D_RW(s)->l_desc)->stat_desc = D_RO(static_l_desc);
+    D_RW(D_RW(s)->l_desc)->stat_desc = D_RW(static_l_desc);
 
     /* dynamic distance tree */
     POBJ_ALLOC(pop, &D_RW(s)->dyn_dtree, struct ct_data, sizeof(D_RW(s)->dyn_dtree), NULL, NULL);
     POBJ_ALLOC(pop, &D_RW(s)->d_desc, struct tree_desc, sizeof(struct tree_desc), NULL, NULL);
 
     D_RW(D_RW(s)->d_desc)->dyn_tree = *D_RW(s)->dyn_dtree;
-    D_RW(D_RW(s)->d_desc)->stat_desc = D_RO(static_d_desc);
+    D_RW(D_RW(s)->d_desc)->stat_desc = D_RW(static_d_desc);
 
     /* bit length tree */
     POBJ_ALLOC(pop, &D_RW(s)->bl_tree, struct ct_data, sizeof(D_RW(s)->bl_tree), NULL, NULL);
     POBJ_ALLOC(pop, &D_RW(s)->bl_desc, struct tree_desc, sizeof(struct tree_desc), NULL, NULL);
 
     D_RW(D_RW(s)->bl_desc)->dyn_tree = *D_RW(s)->bl_tree;
-    D_RW(D_RW(s)->bl_desc)->stat_desc = D_RO(static_bl_desc);
+    D_RW(D_RW(s)->bl_desc)->stat_desc = D_RW(static_bl_desc);
 
 
     D_RW(s)->bi_buf = 0;

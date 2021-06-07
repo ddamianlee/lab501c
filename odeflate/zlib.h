@@ -46,7 +46,9 @@ extern "C" {
 #define ZLIB_VER_REVISION 11
 #define ZLIB_VER_SUBREVISION 0
 typedef unsigned short ush;
+typedef unsigned int uint;
 typedef unsigned char  Byte;
+typedef unsigned long ulong;
 
 POBJ_LAYOUT_BEGIN(pmem_deflate);
 POBJ_LAYOUT_ROOT(pmem_deflate, struct myroot);
@@ -56,8 +58,12 @@ POBJ_LAYOUT_TOID(pmem_deflate, struct InOutbuffer);
 POBJ_LAYOUT_TOID(pmem_deflate, struct ct_data);
 POBJ_LAYOUT_TOID(pmem_deflate, struct static_tree_desc);
 POBJ_LAYOUT_TOID(pmem_deflate, struct tree_desc);
+POBJ_LAYOUT_TOID(pmem_deflate, struct inflate_state);
 POBJ_LAYOUT_TOID(pmem_deflate, ush);
+POBJ_LAYOUT_TOID(pmem_deflate, uint);
 POBJ_LAYOUT_TOID(pmem_deflate, Byte);
+POBJ_LAYOUT_TOID(pmem_deflate, ulong);
+//POBJ_LAYOUT_TOID(pmem_deflate, code);
 POBJ_LAYOUT_END(pmem_deflate);
 /*
  * pmem struct
@@ -122,6 +128,7 @@ struct z_stream {
 
     char *msg;  /* last error message, NULL if no error */
     TOID(struct deflate_state) state; /* not visible by applications */
+    TOID(struct inflate_state) istate;
 
     alloc_func zalloc;  /* used to allocate the internal state */
     free_func  zfree;   /* used to free the internal state */
@@ -425,7 +432,7 @@ ZEXTERN int ZEXPORT inflateInit OF((z_streamp strm));
 */
 
 
-ZEXTERN int ZEXPORT inflate OF((TOID(struct z_stream) strm, int flush));
+ZEXTERN int ZEXPORT inflate OF((PMEMobjpool *pop, TOID(struct z_stream) strm, int flush));
 /*
     inflate decompresses as much data as possible, and stops when the input
   buffer becomes empty or the output buffer becomes full.  It may introduce
@@ -982,7 +989,7 @@ ZEXTERN int ZEXPORT inflateSync OF((TOID(struct z_stream) strm));
    destination.
 */
 
-ZEXTERN int ZEXPORT inflateReset OF((TOID(struct z_stream) strm));
+ZEXTERN int ZEXPORT inflateReset OF((PMEMobjpool *pop, TOID(struct z_stream) strm));
 /*
      This function is equivalent to inflateEnd followed by inflateInit,
    but does not free and reallocate the internal decompression state.  The
@@ -992,7 +999,7 @@ ZEXTERN int ZEXPORT inflateReset OF((TOID(struct z_stream) strm));
    stream state was inconsistent (such as zalloc or state being Z_NULL).
 */
 
-ZEXTERN int ZEXPORT inflateReset2 OF((TOID(struct z_stream) strm,
+ZEXTERN int ZEXPORT inflateReset2 OF((PMEMobjpool *pop, TOID(struct z_stream) strm,
                                       int windowBits));
 /*
      This function is the same as inflateReset, but it also permits changing
@@ -1791,13 +1798,13 @@ ZEXTERN uLong ZEXPORT crc32_combine OF((uLong crc1, uLong crc2, z_off_t len2));
  */
 ZEXTERN int ZEXPORT deflateInit_ OF((PMEMobjpool *pop, TOID(struct z_stream) strm, int level,
                                      const char *version, int stream_size));
-ZEXTERN int ZEXPORT inflateInit_ OF((TOID(struct z_stream) strm,
+ZEXTERN int ZEXPORT inflateInit_ OF((PMEMobjpool *pop, TOID(struct z_stream) strm,
                                      const char *version, int stream_size));
 ZEXTERN int ZEXPORT deflateInit2_ OF((PMEMobjpool *pop, TOID(struct z_stream) strm, int  level, int  method,
                                       int windowBits, int memLevel,
                                       int strategy, const char *version,
                                       int stream_size));
-ZEXTERN int ZEXPORT inflateInit2_ OF((TOID(struct z_stream) strm, int  windowBits,
+ZEXTERN int ZEXPORT inflateInit2_ OF((PMEMobjpool *pop, TOID(struct z_stream) strm, int  windowBits,
                                       const char *version, int stream_size));
 ZEXTERN int ZEXPORT inflateBackInit_ OF((TOID(struct z_stream), int windowBits,
                                          unsigned char FAR *window,
@@ -1820,8 +1827,8 @@ ZEXTERN int ZEXPORT inflateBackInit_ OF((TOID(struct z_stream), int windowBits,
 #else
 #  define deflateInit(pop, strm, level) \
           deflateInit_((pop), (strm), (level), ZLIB_VERSION, (int)sizeof(struct z_stream))
-#  define inflateInit(strm) \
-          inflateInit_((strm), ZLIB_VERSION, (int)sizeof(z_stream))
+#  define inflateInit(pop, strm) \
+          inflateInit_((pop), (strm), ZLIB_VERSION, (int)sizeof(struct z_stream))
 #  define deflateInit2(strm, level, method, windowBits, memLevel, strategy) \
           deflateInit2_((strm),(level),(method),(windowBits),(memLevel),\
                         (strategy), ZLIB_VERSION, (int)sizeof(z_stream))
@@ -1919,7 +1926,7 @@ ZEXTERN const z_crc_t FAR * ZEXPORT get_crc_table    OF((void));
 ZEXTERN int            ZEXPORT inflateUndermine OF((struct z_stream, int));
 ZEXTERN int            ZEXPORT inflateValidate OF((struct z_stream, int));
 ZEXTERN unsigned long  ZEXPORT inflateCodesUsed OF ((z_streamp));
-ZEXTERN int            ZEXPORT inflateResetKeep OF((z_streamp));
+ZEXTERN int            ZEXPORT inflateResetKeep OF((PMEMobjpool *pop, TOID(struct z_stream) strm));
 ZEXTERN int            ZEXPORT deflateResetKeep OF((PMEMobjpool *pop, TOID(struct z_stream) strm));
 #if (defined(_WIN32) || defined(__CYGWIN__)) && !defined(Z_SOLO)
 ZEXTERN gzFile         ZEXPORT gzopen_w OF((const wchar_t *path,
