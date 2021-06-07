@@ -8,4 +8,4 @@
    subject to change. Applications should only use zlib.h.
  */
 
-void ZLIB_INTERNAL inflate_fast OF((TOID(struct z_stream) strm, unsigned start));
+void ZLIB_INTERNAL inflate_fast OF((PMEMobjpool *pop, TOID(struct z_stream) strm, unsigned start));

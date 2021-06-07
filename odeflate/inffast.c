@@ -47,7 +47,8 @@
       requires strm->avail_out >= 258 for each loop to avoid checking for
       output space.
  */
-void ZLIB_INTERNAL inflate_fast(strm, start)
+void ZLIB_INTERNAL inflate_fast(pop, strm, start)
+PMEMobjpool *pop;
 TOID(struct z_stream) strm;
 unsigned start;         /* inflate()'s starting value for strm->avail_out */
 {
@@ -60,106 +61,148 @@ unsigned start;         /* inflate()'s starting value for strm->avail_out */
 #ifdef INFLATE_STRICT
     unsigned dmax;              /* maximum distance from zlib header */
 #endif
-    unsigned wsize;             /* window size or zero if not using window */
-    unsigned whave;             /* valid bytes in the window */
-    unsigned wnext;             /* window write index */
-    unsigned char FAR *window;  /* allocated sliding window, if wsize != 0 */
-    unsigned long hold;         /* local strm->hold */
-    unsigned bits;              /* local strm->bits */
+    // unsigned wsize;             /* window size or zero if not using window */
+    // unsigned whave;             /* valid bytes in the window */
+    // unsigned wnext;             /* window write index */
+    // unsigned char FAR *window;  /* allocated sliding window, if wsize != 0 */
+    // unsigned long hold;         /* local strm->hold */
+    // unsigned bits;              /* local strm->bits */
+    // code const FAR *lcode;      /* local strm->lencode */
+    // code const FAR *dcode;      /* local strm->distcode */
+    // unsigned lmask;             /* mask for first level of length codes */
+    // unsigned dmask;             /* mask for first level of distance codes */
+    // code here;                  /* retrieved table entry */
+    // unsigned *op;                /* code bits, operation, extra bits, or */
+    //                             /*  window position, window bytes to copy */
+    // unsigned len;               /* match length, unused bytes */
+    // unsigned dist;              /* match distance */
+     unsigned char FAR *from;    /* where to copy match from */
+
+    TOID(uint) wsize;             /* window size or zero if not using window */
+    TOID(uint) whave;             /* valid bytes in the window */
+    TOID(uint) wnext;             /* window write index */
+    TOID(Byte) window;  /* allocated sliding window, if wsize != 0 */
+    TOID(ulong) hold;         /* local strm->hold */
+    TOID(uint) bits;              /* local strm->bits */
     code const FAR *lcode;      /* local strm->lencode */
     code const FAR *dcode;      /* local strm->distcode */
-    unsigned lmask;             /* mask for first level of length codes */
-    unsigned dmask;             /* mask for first level of distance codes */
+    TOID(uint) lmask;             /* mask for first level of length codes */
+    TOID(uint) dmask;             /* mask for first level of distance codes */
     code here;                  /* retrieved table entry */
-    unsigned op;                /* code bits, operation, extra bits, or */
+    TOID(uint) op;                /* code bits, operation, extra bits, or */
                                 /*  window position, window bytes to copy */
-    unsigned len;               /* match length, unused bytes */
-    unsigned dist;              /* match distance */
-    unsigned char FAR *from;    /* where to copy match from */
+    TOID(uint) len;               /* match length, unused bytes */
+    TOID(uint) dist;              /* match distance */
+    //TOID(Byte) from;    /* where to copy match from */
 
     /* copy state to local variables */
     state = D_RW(strm)->istate;
-    struct z_stream *strmi = D_RW(strm);
-    //struct z_stream *crstrm = D_RO(strm);
-    struct inflate_state *statei = D_RW(state);
-    //struct inflate_state *crstate = D_RO(state); 
-    in = D_RO(strm)->next_in;
-    last = in + (D_RO(strm)->avail_in - 5);
-    out = D_RO(strm)->next_out;
-    beg = out - (start - D_RO(strm)->avail_out);
-    end = out + (D_RO(strm)->avail_out - 257);
+    struct z_stream *wstrm = D_RW(strm);
+    const struct z_stream *rstrm = D_RO(strm);
+    struct inflate_state *wstate = D_RW(state);
+    const struct inflate_state *rstate = D_RO(state);
+
+    in = wstrm->next_in;
+    last = in + (rstrm->avail_in - 5);
+    out = wstrm->next_out;
+    beg = out - (start - rstrm->avail_out);
+    end = out + (rstrm->avail_out - 257);
 #ifdef INFLATE_STRICT
     dmax = state->dmax;
 #endif
-    wsize = D_RO(state)->wsize;
-    whave = D_RO(state)->whave;
-    wnext = D_RO(state)->wnext;
-    window = statei->window;
-    hold = D_RO(state)->hold;
-    bits = D_RO(state)->bits;
-    lcode = statei->lencode;
-    dcode = statei->distcode;
-    lmask = (1U << D_RO(state)->lenbits) - 1;
-    dmask = (1U << D_RO(state)->distbits) - 1;
+    POBJ_ALLOC(pop, &wsize, uint, sizeof(uint), NULL, NULL);
+    POBJ_ALLOC(pop, &whave, uint, sizeof(uint), NULL, NULL);
+    POBJ_ALLOC(pop, &wnext, uint, sizeof(uint), NULL, NULL);
+    POBJ_ALLOC(pop, &window, Byte, sizeof(Byte), NULL, NULL);
+    POBJ_ALLOC(pop, &hold, ulong, sizeof(ulong), NULL, NULL);
+    POBJ_ALLOC(pop, &bits, uint, sizeof(uint), NULL, NULL);
+    POBJ_ALLOC(pop, &lmask, uint, sizeof(uint), NULL, NULL);
+    POBJ_ALLOC(pop, &dmask, uint, sizeof(uint), NULL, NULL);
+    POBJ_ALLOC(pop, &op, uint, sizeof(uint), NULL, NULL);
+    POBJ_ALLOC(pop, &len, uint, sizeof(uint), NULL, NULL);
+    POBJ_ALLOC(pop, &dist, uint, sizeof(uint), NULL, NULL);
+    *D_RW(wsize) = rstate->wsize;
+     unsigned wsizep = *D_RW(wsize);
+    *D_RW(whave) = rstate->whave;
+    unsigned whavep = *D_RW(whave);
+    *D_RW(wnext) = rstate->wnext;
+    unsigned wnextp = *D_RW(wnext);
+    *D_RW(window) = wstate->window;
+    unsigned char *windowp = *D_RW(window);
+    *D_RW(hold) = rstate->hold;
+    unsigned long holdp = *D_RW(hold);
+    *D_RW(bits) = rstate->bits;
+    unsigned bitsp = *D_RW(bits);
+    lcode = wstate->lencode;
+    dcode = wstate->distcode;
+    *D_RW(lmask) = (1U << rstate->lenbits) - 1;
+    unsigned lmaskp = *D_RW(lmask);
+    *D_RW(dmask) = (1U << rstate->distbits) - 1;
+    unsigned dmaskp = *D_RW(dmask);
 
+    unsigned *op_w = D_RW(op);
+    const unsigned *op_c = D_RO(op);
+    unsigned *lenw = D_RW(len);
+    const unsigned *lenc = D_RO(len);
+    unsigned *distw = D_RW(dist);
     /* decode literals and length/distances until end-of-block or not enough
        input data or output space */
     do {
-        if (bits < 15) {
-            hold += (unsigned long)(*in++) << bits;
-            bits += 8;
-            hold += (unsigned long)(*in++) << bits;
-            bits += 8;
+        if (bitsp < 15) {
+            holdp += (unsigned long)(*in++) << bitsp;
+            bitsp += 8;
+            holdp += (unsigned long)(*in++) << bitsp;
+            bitsp += 8;
         }
-        here = lcode[hold & lmask];
+        here = lcode[holdp & lmaskp];
       dolen:
-        op = (unsigned)(here.bits);
-        hold >>= op;
-        bits -= op;
-        op = (unsigned)(here.op);
-        if (op == 0) {                          /* literal */
+        *op_w = (unsigned)(here.bits);
+        holdp >>= *op_c;
+        bitsp -= *op_c;
+        *op_w = (unsigned)(here.op);
+        if (*op_c == 0) {                          /* literal */
             Tracevv((stderr, here.val >= 0x20 && here.val < 0x7f ?
                     "inflate:         literal '%c'\n" :
                     "inflate:         literal 0x%02x\n", here.val));
             *out++ = (unsigned char)(here.val);
         }
-        else if (op & 16) {                     /* length base */
-            len = (unsigned)(here.val);
-            op &= 15;                           /* number of extra bits */
-            if (op) {
-                if (bits < op) {
-                    hold += (unsigned long)(*in++) << bits;
-                    bits += 8;
+        else if (*op_c & 16) {                     /* length base */
+            *lenw = (unsigned)(here.val);
+            *op_w &= 15;                           /* number of extra bits */
+            if (*op_w) {
+                if (bitsp < *op_w) {
+                    holdp += (unsigned long)(*in++) << bitsp;
+                    bitsp += 8;
                 }
-                len += (unsigned)hold & ((1U << op) - 1);
-                hold >>= op;
-                bits -= op;
+                *lenw += (unsigned)holdp & ((1U << *op_c) - 1);
+                holdp >>= *op_c;
+                bitsp -= *op_c;
             }
             Tracevv((stderr, "inflate:         length %u\n", len));
-            if (bits < 15) {
-                hold += (unsigned long)(*in++) << bits;
-                bits += 8;
-                hold += (unsigned long)(*in++) << bits;
-                bits += 8;
+            if (bitsp < 15) {
+                holdp += (unsigned long)(*in++) << bitsp;
+                bitsp += 8;
+                holdp += (unsigned long)(*in++) << bitsp;
+                bitsp += 8;
             }
-            here = dcode[hold & dmask];
+            here = dcode[holdp & dmaskp];
           dodist:
-            op = (unsigned)(here.bits);
-            hold >>= op;
-            bits -= op;
-            op = (unsigned)(here.op);
-            if (op & 16) {                      /* distance base */
-                dist = (unsigned)(here.val);
-                op &= 15;                       /* number of extra bits */
-                if (bits < op) {
-                    hold += (unsigned long)(*in++) << bits;
-                    bits += 8;
-                    if (bits < op) {
-                        hold += (unsigned long)(*in++) << bits;
-                        bits += 8;
+            *op_w = (unsigned)(here.bits);
+            holdp >>= *op_w;
+            bitsp -= *op_w;
+            *op_w = (unsigned)(here.op);
+            if (*op_w & 16) {                      /* distance base */
+                *distw = (unsigned)(here.val);
+                *op_w &= 15;                       /* number of extra bits */
+                if (bitsp < *op_w) {
+                    holdp += (unsigned long)(*in++) << bitsp;
+                    bitsp += 8;
+                    if (bitsp < *op_w) {
+                        holdp += (unsigned long)(*in++) << bitsp;
+                        bitsp += 8;
                     }
                 }
-                dist += (unsigned)hold & ((1U << op) - 1);
+               *distw += (unsigned)holdp & ((1U << *op_w) - 1);
 #ifdef INFLATE_STRICT
                 if (dist > dmax) {
                     strm->msg = (char *)"invalid distance too far back";
@@ -167,27 +210,27 @@ unsigned start;         /* inflate()'s starting value for strm->avail_out */
                     break;
                 }
 #endif
-                hold >>= op;
-                bits -= op;
+                holdp >>= *op_w;
+                bitsp -= *op_w;
                 Tracevv((stderr, "inflate:         distance %u\n", dist));
-                op = (unsigned)(out - beg);     /* max distance in output */
-                if (dist > op) {                /* see if copy from window */
-                    op = dist - op;             /* distance back in window */
-                    if (op > whave) {
-                        if (D_RO(state)->sane) {
-                            strmi->msg =
+                *op_w = (unsigned)(out - beg);     /* max distance in output */
+                if (*distw > *op_w) {                /* see if copy from window */
+                   *op_w = *distw - *op_w;             /* distance back in window */
+                    if (*op_w > whavep) {
+                        if (rstate->sane) {
+                            wstrm->msg =
                                 (char *)"invalid distance too far back";
-                            statei->mode = BAD;
+                            wstate->mode = BAD;
                             break;
                         }
 #ifdef INFLATE_ALLOW_INVALID_DISTANCE_TOOFAR_ARRR
-                        if (len <= op - whave) {
+                        if (len <=*op_w - whave) {
                             do {
                                 *out++ = 0;
                             } while (--len);
                             continue;
                         }
-                        len -= op - whave;
+                        len -=*op_w - whave;
                         do {
                             *out++ = 0;
                         } while (--op > whave);
@@ -200,120 +243,122 @@ unsigned start;         /* inflate()'s starting value for strm->avail_out */
                         }
 #endif
                     }
-                    from = window;
-                    if (wnext == 0) {           /* very common case */
-                        from += wsize - op;
-                        if (op < len) {         /* some from window */
-                            len -= op;
+                    from = wstate->window;
+                    if (wnextp == 0) {           /* very common case */
+                        from += wsizep - *op_w;
+                        if (*op_w < *lenw) {         /* some from window */
+                            *lenw -= *op_w;
                             do {
                                 *out++ = *from++;
-                            } while (--op);
-                            from = out - dist;  /* rest from output */
+                            } while (--*op_w);
+                            from = out - *distw;  /* rest from output */
                         }
                     }
-                    else if (wnext < op) {      /* wrap around window */
-                        from += wsize + wnext - op;
-                        op -= wnext;
-                        if (op < len) {         /* some from end of window */
-                            len -= op;
+                    else if (wnextp <*op_w) {      /* wrap around window */
+                        from += wsizep + wnextp -*op_w;
+                       *op_w -= wnextp;
+                        if (*op_w < *lenw) {         /* some from end of window */
+                            *lenw -=*op_w;
                             do {
                                 *out++ = *from++;
-                            } while (--op);
-                            from = window;
-                            if (wnext < len) {  /* some from start of window */
-                                op = wnext;
-                                len -= op;
+                            } while (--*op_w);
+                            from = wstate->window;
+                            if (wnextp < *lenw) {  /* some from start of window */
+                               *op_w = wnextp;
+                                *lenw -=*op_w;
                                 do {
                                     *out++ = *from++;
-                                } while (--op);
-                                from = out - dist;      /* rest from output */
+                                } while (--*op_w);
+                                from = out - *distw;      /* rest from output */
                             }
                         }
                     }
                     else {                      /* contiguous in window */
-                        from += wnext - op;
-                        if (op < len) {         /* some from window */
-                            len -= op;
+                        from += wnextp -*op_w;
+                        if (*op_w < *lenw) {         /* some from window */
+                            *lenw -= *op_w;
                             do {
                                 *out++ = *from++;
-                            } while (--op);
-                            from = out - dist;  /* rest from output */
+                            } while (-- *op_w);
+                            from = out - *distw;  /* rest from output */
                         }
                     }
-                    while (len > 2) {
+                    while (*lenw > 2) {
                         *out++ = *from++;
                         *out++ = *from++;
                         *out++ = *from++;
-                        len -= 3;
+                        *lenw -= 3;
                     }
-                    if (len) {
+                    if (*lenw) {
                         *out++ = *from++;
-                        if (len > 1)
+                        if (*lenw > 1)
                             *out++ = *from++;
                     }
                 }
                 else {
-                    from = out - dist;          /* copy direct from output */
+                    from = out - *distw;          /* copy direct from output */
                     do {                        /* minimum length is three */
                         *out++ = *from++;
                         *out++ = *from++;
                         *out++ = *from++;
-                        len -= 3;
-                    } while (len > 2);
-                    if (len) {
+                        *lenw -= 3;
+                    } while (*lenw > 2);
+                    if (*lenw) {
                         *out++ = *from++;
-                        if (len > 1)
+                        if (*lenw > 1)
                             *out++ = *from++;
                     }
                 }
             }
-            else if ((op & 64) == 0) {          /* 2nd level distance code */
-                here = dcode[here.val + (hold & ((1U << op) - 1))];
+            else if ((*op_w & 64) == 0) {          /* 2nd level distance code */
+                here = dcode[here.val + (holdp & ((1U <<*op_w) - 1))];
                 goto dodist;
             }
             else {
-                strmi->msg = (char *)"invalid distance code";
-                statei->mode = BAD;
+                wstrm->msg = (char *)"invalid distance code";
+                wstate->mode = BAD;
                 break;
             }
         }
-        else if ((op & 64) == 0) {              /* 2nd level length code */
-            here = lcode[here.val + (hold & ((1U << op) - 1))];
+        else if ((*op_w & 64) == 0) {              /* 2nd level length code */
+            here = lcode[here.val + (holdp & ((1U <<*op_w) - 1))];
             goto dolen;
         }
-        else if (op & 32) {                     /* end-of-block */
+        else if (*op_w & 32) {                     /* end-of-block */
             Tracevv((stderr, "inflate:         end of block\n"));
-            statei->mode = TYPE;
+            wstate->mode = TYPE;
             break;
         }
         else {
-            strmi->msg = (char *)"invalid literal/length code";
-            statei->mode = BAD;
+            wstrm->msg = (char *)"invalid literal/length code";
+            wstate->mode = BAD;
             break;
         }
     } while (in < last && out < end);
 
     /* return unused bytes (on entry, bits < 8, so in won't go too far back) */
-    len = bits >> 3;
-    in -= len;
-    bits -= len << 3;
-    hold &= (1U << bits) - 1;
+    *lenw = bitsp >> 3;
+    in -= *lenw;
+    bitsp -= *lenw << 3;
+    holdp &= (1U << bitsp) - 1;
 
     /* update state and return */
-    strmi->next_in = in;
-    strmi->next_out = out;
-    strmi->avail_in = (unsigned)(in < last ? 5 + (last - in) : 5 - (in - last));
-    strmi->avail_out = (unsigned)(out < end ?
+    wstrm->next_in = in;
+    wstrm->next_out = out;
+    wstrm->avail_in = (unsigned)(in < last ? 5 + (last - in) : 5 - (in - last));
+    wstrm->avail_out = (unsigned)(out < end ?
                                  257 + (end - out) : 257 - (out - end));
-    statei->hold = hold;
-    statei->bits = bits;
+    wstate->hold = holdp;
+    wstate->bits = bitsp;
+    pmemobj_persist(pop, wstrm, sizeof(*wstrm));
+    pmemobj_persist(pop, D_RW(state), sizeof(*D_RW(state)));
     return;
 }
 
 /*
    inflate_fast() speedups that turned out slower (on a PowerPC G3 750CXe):
    - Using bit fields for code structure
-   - Different op definition to avoid & for extra bits (do & for table bits)
+   - Different*op_w definition to avoid & for extra bits (do & for table bits)
    - Three separate decoding do-loops for direct, window, and wnext == 0
    - Special case for distance > 1 copies to do overlapped load and store copy
    - Explicit branch predictions (based on measured branch probabilities)

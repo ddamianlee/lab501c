@@ -96,7 +96,7 @@
 /* function prototypes */
 local int inflateStateCheck OF((TOID(struct z_stream) strm));
 local void fixedtables OF((TOID(struct inflate_state)state));
-local int updatewindow OF((TOID(struct z_stream) strm, const unsigned char FAR *end,
+local int updatewindow OF((PMEMobjpool *pop, TOID(struct z_stream) strm, const unsigned char FAR *end,
                            unsigned copy));
 #ifdef BUILDFIXED
    void makefixed OF((void));
@@ -430,7 +430,8 @@ void makefixed()
    output will fall in the output data, making match copies simpler and faster.
    The advantage may be dependent on the size of the processor's data caches.
  */
-local int updatewindow(strm, end, copy)
+local int updatewindow(pop, strm, end, copy)
+PMEMobjpool *pop;
 TOID (struct z_stream) strm;
 const Bytef *end;
 unsigned copy;
@@ -447,6 +448,11 @@ unsigned copy;
         statei->window = (unsigned char FAR *)
                         ZALLOC(D_RW(strm), 1U << D_RO(state)->wbits,
                                sizeof(unsigned char));
+        if(pmemobj_alloc(pop, statei->window, 1U << D_RO(state)->wbits*sizeof(unsigned char), NULL, NULL, NULL))
+        {
+            printf("window allocation wrong");
+            exit(1);
+        }
         if (D_RO(state)->window == Z_NULL) return 1;
     }
 
@@ -459,17 +465,17 @@ unsigned copy;
 
     /* copy state->wsize or less output bytes into the circular window */
     if (copy >= D_RO(state)->wsize) {
-        zmemcpy(statei->window, end - statei->wsize, statei->wsize);
+        pmemobj_memcpy_persist(pop, statei->window, end - statei->wsize, statei->wsize);
         statei->wnext = 0;
         statei->whave = D_RO(state)->wsize;
     }
     else {
         dist = D_RO(state)->wsize - D_RO(state)->wnext;
         if (dist > copy) dist = copy;
-        zmemcpy(statei->window + D_RO(state)->wnext, end - copy, dist);
+        pmemobj_memcpy_persist(pop, statei->window + D_RO(state)->wnext, end - copy, dist);
         copy -= dist;
         if (copy) {
-            zmemcpy(statei->window, end - copy, copy);
+            pmemobj_memcpy_persist(pop, statei->window, end - copy, copy);
             statei->wnext = copy;
             statei->whave = D_RO(state)->wsize;
         }
@@ -964,7 +970,7 @@ int flush;
         case LEN:
             if (have >= 6 && left >= 258) {
                 RESTORE();
-                inflate_fast(strm, out);
+                inflate_fast(pop, strm, out);
                 LOAD();
                 if (statei->mode == TYPE)
                     statei->back = -1;
@@ -1161,7 +1167,7 @@ int flush;
     RESTORE();
     if (D_RO(state)->wsize || (out != D_RO(strm)->avail_out && D_RO(state)->mode < BAD &&
             (D_RO(state)->mode < CHECK || flush != Z_FINISH)))
-        if (updatewindow(strm, strmi->next_out, out - strmi->avail_out)) {
+        if (updatewindow(pop, strm, strmi->next_out, out - strmi->avail_out)) {
             statei->mode = MEM;
             return Z_MEM_ERROR;
         }
