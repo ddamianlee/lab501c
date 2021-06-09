@@ -117,7 +117,6 @@ int def(char *source, char *dest, size_t mapped_len, int level)
     //     exit(1);
     // }
     maplen = mapped_len;
-    printf("is source file pmem-file? = %d\n", is_pmem);
 
     /* allocate deflate state */
     strm.zalloc = Z_NULL;
@@ -362,6 +361,7 @@ int main(int argc, char **argv)
     /* do compression if arguments = 4 */
     if (argc == 4)
     {
+        /* open the input file */
         if((srcfd = open(argv[1], O_RDONLY)) < 0)
         {
             perror(argv[1]);
@@ -372,11 +372,16 @@ int main(int argc, char **argv)
             perror("fstat");
             exit(1);
         }
+        
+        /* map the src file to pm */
         if((srcpmemaddr = pmem_map_file(argv[2], stbuf.st_size, PMEM_FILE_CREATE|PMEM_FILE_EXCL, 0666, &mapped_len, &is_pmem)) == NULL)
         {
             perror("pmem_map_file");
             exit(1);
         }
+        printf("source file in pmem? = %d\n", is_pmem);
+        
+        /* copy src file */
         if(is_pmem)
         {
             startaddr = srcpmemaddr;
@@ -412,6 +417,7 @@ int main(int argc, char **argv)
             }
 
         }
+        /* send src pmem address and output to deflate */
         ret = def(startaddr, argv[3], mapped_len, Z_DEFAULT_COMPRESSION);
         if (ret != Z_OK)
             zerr(ret);
@@ -423,6 +429,7 @@ int main(int argc, char **argv)
     /* do decompression if -d specified */
     else if (argc == 5 && strcmp(argv[1], "-d") == 0) 
     {
+        /* open the input file */
         if((srcfd = open(argv[2], O_RDONLY)) < 0)
         {
             perror(argv[1]);
@@ -433,11 +440,15 @@ int main(int argc, char **argv)
             perror("fstat");
             exit(1);
         }
+        
+        /* map the src file to pm */
         if((srcpmemaddr = pmem_map_file(argv[3], stbuf.st_size, PMEM_FILE_CREATE|PMEM_FILE_EXCL, 0666, &mapped_len, &is_pmem)) == NULL)
         {
             perror("pmem_map_file");
             exit(1);
         }
+        printf("source file in pmem? = %d\n", is_pmem);
+        /* copy src file */
         if(is_pmem)
         {
             startaddr = srcpmemaddr;
@@ -473,6 +484,7 @@ int main(int argc, char **argv)
             }
 
         }
+        /* send src pmem address and output to inflate */
         ret = inf(startaddr, argv[4], mapped_len);
         if (ret != Z_OK)
             zerr(ret);
