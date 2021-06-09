@@ -86,7 +86,7 @@ local const config configuration_table[10] = {
  *    characters, so that a running hash key can be computed from the previous
  *    key instead of complete recalculation each time.
  */
-#define UPDATE_HASH(s,h,c) (h = (((h)<<rs->hash_shift) ^ (c)) & rs->hash_mask)
+#define UPDATE_HASH(s,h,c) (h = (((h) << rs->hash_shift) ^ (c)) & rs->hash_mask)
 
 
 /* ===========================================================================

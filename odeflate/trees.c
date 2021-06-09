@@ -750,6 +750,7 @@ local void build_tree(pop, s, desc)
 
     /* The field len is now set, we can generate the bit codes */
     gen_codes (tree, max_code, ws->bl_count);
+    pmemobj_persist(pop, D_RW(desc), sizeof(*D_RW(desc)));
 }
 
 /* ===========================================================================
