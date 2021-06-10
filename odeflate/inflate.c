@@ -445,8 +445,8 @@ unsigned copy;
     const struct inflate_state *rstate = D_RO(state);
     //struct inflate_state *rstate = rstate;
     
-    TOID(Byte) windowp;
-    if(POBJ_ALLOC(pop, &windowp, Byte, 1U << rstate->wbits*sizeof(unsigned char), NULL, NULL))
+    //TOID(Byte) windowp;
+    if(POBJ_ALLOC(pop, &D_RW(strm)->windowp, Byte, 1U << rstate->wbits*sizeof(unsigned char), NULL, NULL))
     {
         printf("window allocation wrong");
         exit(1);
@@ -454,14 +454,14 @@ unsigned copy;
     /* if it hasn't been done already, allocate space for the window */
     if (rstate->window == Z_NULL) {
         // wstate->window = (unsigned char FAR *)
-        //                 ZALLOC(D_RW(strm), 1U << rstate->wbits,
-        //                        sizeof(unsigned char));
+        //                  ZALLOC(D_RW(strm), 1U << rstate->wbits,
+        //                         sizeof(unsigned char));
         // if(pmemobj_alloc(pop, wstate->window, 1U << rstate->wbits*sizeof(unsigned char), NULL, NULL, NULL))
         // {
         //     printf("window allocation wrong");
         //     exit(1);
         // }
-        wstate->window = D_RW(windowp);
+        wstate->window = D_RW(D_RW(strm)->windowp);
         if (rstate->window == Z_NULL) return 1;
     }
 
@@ -532,65 +532,65 @@ unsigned copy;
 #define LOAD() \
     do { \
         put = wstrm->next_out; \
-        *left_ = wstrm->avail_out; \
+        *left = rstrm->avail_out; \
         next = wstrm->next_in; \
-        *have_ = wstrm->avail_in; \
-        *hold_ = wstate->hold; \
-        *bits_ = wstate->bits; \
+        *have = rstrm->avail_in; \
+        *hold = rstate->hold; \
+        *bits = rstate->bits; \
     } while (0)
 
 /* Restore state from registers in inflate() */
 #define RESTORE() \
     do { \
         wstrm->next_out = put; \
-        wstrm->avail_out = *rleft_; \
+        wstrm->avail_out = *left; \
         wstrm->next_in = next; \
-        wstrm->avail_in = *rhave_; \
-        wstate->hold = *rhold_; \
-        wstate->bits = *rbits_; \
+        wstrm->avail_in = *have; \
+        wstate->hold = *hold; \
+        wstate->bits = *bits; \
     } while (0)
 
 /* Clear the input bit accumulator */
 #define INITBITS() \
     do { \
-        *hold_ = 0; \
-        *bits_ = 0; \
+        *hold = 0; \
+        *bits = 0; \
     } while (0)
 
 /* Get a byte of input into the bit accumulator, or return from inflate()
    if there is no input available. */
 #define PULLBYTE() \
     do { \
-        if (*rhave_ == 0) goto inf_leave; \
-        (*have_)--; \
-        *hold_ += (unsigned long)(*next++) << *rbits_; \
-        *bits_ += 8; \
+        if (*have == 0) goto inf_leave; \
+        (*have)--; \
+        *hold += (unsigned long)(*next++) << *bits; \
+        *bits += 8; \
     } while (0)
 
 /* Assure that there are at least n bits in the bit accumulator.  If there is
    not enough available input to do that, then return from inflate(). */
 #define NEEDBITS(n) \
     do { \
-        while (*rbits_ < (unsigned)(n)) \
+        while (*bits < (unsigned)(n)) \
             PULLBYTE(); \
     } while (0)
 
 /* Return the low n bits of the bit accumulator (n < 16) */
 #define BITS(n) \
-    ((unsigned)*hold_ & ((1U << (n)) - 1))
+    ((unsigned)(*hold) & ((1U << (n)) - 1))
 
 /* Remove n bits from the bit accumulator */
 #define DROPBITS(n) \
     do { \
-        *hold_ >>= (n); \
-        *bits_ -= (unsigned)(n); \
+        *hold >>= (n); \
+        *bits -= (unsigned)(n); \
     } while (0)
 
 /* Remove zero to seven bits as needed to go to a byte boundary */
 #define BYTEBITS() \
     do { \
-        *hold_ >>= *rbits_ & 7; \
-        *bits_ -= *rbits_ & 7; \
+        *hold >>= *bits & 7; \
+        *bits -= *bits & 7; \
     } while (0)
 
 /*
@@ -684,55 +684,55 @@ int flush;
     TOID(struct inflate_state) state;
     z_const unsigned char FAR *next;    /* next input */
     unsigned char *put;     /* next output */
-    //unsigned have, left;        /* available input and output */
-    //unsigned long hold;         /* bit buffer */
-    //unsigned bits;              /* bits in bit buffer */
-    //unsigned in, out;           /* save starting available input and output */
-    //unsigned copy;              /* number of stored or match bytes to copy */
+    // unsigned have, left;        /* available input and output */
+    // unsigned long hold;         /* bit buffer */
+    // unsigned bits;              /* bits in bit buffer */
+    // unsigned in, out;           /* save starting available input and output */
+    // unsigned copy;              /* number of stored or match bytes to copy */
     unsigned char *from;    /* where to copy match bytes from */
     code here;                  /* current decoding table entry */
     code last;                  /* parent table entry */
-    //unsigned len;               /* length to copy for repeats, bits to drop */
-    //int ret;                    /* return code */
+    // unsigned len;               /* length to copy for repeats, bits to drop */
+    // int ret;                    /* return code */
 
     // TOID(Byte)  next;    /* next input */
     // TOID(Byte)  put;     /* next output */
-    TOID(uint) have, left;        /* available input and output */
-    TOID(ulong) hold;         /* bit buffer */
-    TOID(uint) bits;              /* bits in bit buffer */
-    TOID(uint) in, out;           /* save starting available input and output */
-    TOID(uint) copy;              /* number of stored or match bytes to copy */
+    TOID(uint) have_, left_;        /* available input and output */
+    TOID(ulong) hold_;         /* bit buffer */
+    TOID(uint) bits_;              /* bits in bit buffer */
+    TOID(uint) in_, out_;           /* save starting available input and output */
+    TOID(uint) copy_;              /* number of stored or match bytes to copy */
     // TOID(Byte) from;    /* where to copy match bytes from */
     // TOID(code) here;                  /* current decoding table entry */
     // TOID(code) last;                  /* parent table entry */
-    TOID(uint) len;               /* length to copy for repeats, bits to drop */
+    TOID(uint) len_;               /* length to copy for repeats, bits to drop */
     int ret;                    /* return code */
 
-    POBJ_ALLOC(pop, &have, uint, sizeof(uint), NULL, NULL);
-    POBJ_ALLOC(pop, &left, uint, sizeof(uint), NULL, NULL);
-    POBJ_ALLOC(pop, &hold, ulong, sizeof(ulong), NULL, NULL);
-    POBJ_ALLOC(pop, &bits, uint, sizeof(uint), NULL, NULL);
-    POBJ_ALLOC(pop, &in, uint, sizeof(uint), NULL, NULL);
-    POBJ_ALLOC(pop, &out, uint, sizeof(uint), NULL, NULL);
-    POBJ_ALLOC(pop, &copy, uint, sizeof(uint), NULL, NULL);
-    POBJ_ALLOC(pop, &len, uint, sizeof(uint), NULL, NULL);
+    POBJ_ALLOC(pop, &have_, uint, sizeof(uint), NULL, NULL);
+    POBJ_ALLOC(pop, &left_, uint, sizeof(uint), NULL, NULL);
+    POBJ_ALLOC(pop, &hold_, ulong, sizeof(ulong), NULL, NULL);
+    POBJ_ALLOC(pop, &bits_, uint, sizeof(uint), NULL, NULL);
+    POBJ_ALLOC(pop, &in_, uint, sizeof(uint), NULL, NULL);
+    POBJ_ALLOC(pop, &out_, uint, sizeof(uint), NULL, NULL);
+    POBJ_ALLOC(pop, &copy_, uint, sizeof(uint), NULL, NULL);
+    POBJ_ALLOC(pop, &len_, uint, sizeof(uint), NULL, NULL);
     
-    unsigned *have_ = D_RW(have);
-    const unsigned *rhave_ = D_RO(have);
-    unsigned *left_ = D_RW(left);
-    const unsigned *rleft_ = D_RO(left);
-    unsigned long *hold_ = D_RW(hold);
-    const unsigned long *rhold_ = D_RO(hold);
-    unsigned *bits_ = D_RW(bits);
-    const unsigned *rbits_ = D_RO(bits);
-    unsigned *in_ = D_RW(in);
-    const unsigned *rin_ = D_RO(in);
-    unsigned *out_ = D_RW(out);
-    const unsigned *rout_ = D_RO(out);
-    unsigned *copy_ = D_RW(copy);
-    const unsigned *rcopy_ = D_RO(copy);
-    unsigned *len_ = D_RW(len);
-    const unsigned *rlen_ = D_RO(len);
+    unsigned *have = D_RW(have_);
+    // const unsigned *have = D_RO(have);
+    unsigned *left = D_RW(left_);
+    // const unsigned left = D_RO(left);
+    unsigned long *hold = D_RW(hold_);
+    // const unsigned long hold = D_RO(hold);
+    unsigned *bits = D_RW(bits_);
+    // const unsigned bits = D_RO(bits);
+    unsigned *in = D_RW(in_);
+    // const unsigned in = D_RO(in);
+    unsigned *out = D_RW(out_);
+    // const unsigned out = D_RO(out);
+    unsigned *copy = D_RW(copy_);
+    // const unsigned copy = D_RO(copy);
+    unsigned *len = D_RW(len_);
+    // const unsigned len = D_RO(len);
 
     state = D_RW(strm)->istate;
     struct inflate_state *wstate = D_RW(state);
@@ -757,8 +757,8 @@ int flush;
 
     if (rstate->mode == TYPE) wstate->mode = TYPEDO;      /* skip check */
     LOAD();
-    in = have;
-    out = left;
+    *in = *have;
+    *out = *left;
     ret = Z_OK;
 
     for (;;)
@@ -770,7 +770,7 @@ int flush;
             }
             NEEDBITS(16);
 
-            if (((BITS(8) << 8) + (*rhold_ >> 8)) % 31) {
+            if (((BITS(8) << 8) + ((*hold) >> 8)) % 31) {
                 wstrm->msg = (char *)"incorrect header check";
                 wstate->mode = BAD;
                 break;
@@ -781,24 +781,24 @@ int flush;
                 break;
             }
             DROPBITS(4);
-            *len_ = BITS(4) + 8;
+            (*len) = BITS(4) + 8;
             if (rstate->wbits == 0)
-                wstate->wbits = *rlen_;
-            if (*rlen_ > 15 || *rlen_ > rstate->wbits) {
+                wstate->wbits = (*len);
+            if ((*len) > 15 || (*len) > rstate->wbits) {
                 wstrm->msg = (char *)"invalid window size";
                 wstate->mode = BAD;
                 break;
             }
-            wstate->dmax = 1U << *rlen_;
+            wstate->dmax = 1U << (*len);
             Tracev((stderr, "inflate:   zlib header ok\n"));
             wstrm->adler = wstate->check = adler32(0L, Z_NULL, 0);
-            wstate->mode = *rhold_ & 0x200 ? DICTID : TYPE;
+            wstate->mode = (*hold) & 0x200 ? DICTID : TYPE;
             INITBITS();
             break;
 
         case DICTID:
             NEEDBITS(32);
-            wstrm->adler = wstate->check = ZSWAP32(*rhold_);
+            wstrm->adler = wstate->check = ZSWAP32((*hold));
             INITBITS();
             wstate->mode = DICT;
         case DICT:
@@ -849,12 +849,12 @@ int flush;
         case STORED:
             BYTEBITS();                         /* go to byte boundary */
             NEEDBITS(32);
-            if ((*rhold_ & 0xffff) != ((*rhold_ >> 16) ^ 0xffff)) {
+            if (((*hold) & 0xffff) != (((*hold) >> 16) ^ 0xffff)) {
                 wstrm->msg = (char *)"invalid stored block lengths";
                 wstate->mode = BAD;
                 break;
             }
-            wstate->length = (unsigned)*rhold_ & 0xffff;
+            wstate->length = (unsigned)((*hold)) & 0xffff;
             Tracev((stderr, "inflate:       stored length %u\n",
                     state->length));
             INITBITS();
@@ -863,18 +863,18 @@ int flush;
         case COPY_:
             wstate->mode = COPY;
         case COPY:
-            *copy_ = rstate->length;
-            if (*rcopy_) {
-                if (*rcopy_ > *rhave_) *copy_ = *rhave_;
-                if (*rcopy_ > *rleft_) *copy_ = *rleft_;
-                if (*rcopy_ == 0) goto inf_leave;
+            ((*copy)) = rstate->length;
+            if ((*copy)) {
+                if ((*copy) > (*have)) (*copy) = (*have);
+                if ((*copy) > (*left)) (*copy) = (*left);
+                if ((*copy) == 0) goto inf_leave;
                 //zmemcpy(put, next, copy);
-                pmemobj_memcpy_persist(pop, put, next, *rcopy_);
-                *have_ -= *rcopy_;
-                next += *rcopy_;
-                *left_ -= *rcopy_;
-                put += *rcopy_;
-                wstate->length -= *rcopy_;
+                pmemobj_memcpy_persist(pop, put, next, (*copy));
+                (*have) -= (*copy);
+                next += (*copy);
+                (*left) -= (*copy);
+                put += (*copy);
+                wstate->length -= (*copy);
                 break;
             }
             Tracev((stderr, "inflate:       stored end\n"));
@@ -923,7 +923,7 @@ int flush;
             while (rstate->have < rstate->nlen + rstate->ndist) {
                 for (;;) {
                     here = rstate->lencode[BITS(rstate->lenbits)];
-                    if ((unsigned)(here.bits) <= *rbits_) break;
+                    if ((unsigned)(here.bits) <= (*bits)) break;
                     PULLBYTE();
                 }
                 if (here.val < 16) {
@@ -939,31 +939,31 @@ int flush;
                             wstate->mode = BAD;
                             break;
                         }
-                        *len_ = rstate->lens[rstate->have - 1];
-                        *copy_ = 3 + BITS(2);
+                        (*len) = rstate->lens[rstate->have - 1];
+                        (*copy) = 3 + BITS(2);
                         DROPBITS(2);
                     }
                     else if (here.val == 17) {
                         NEEDBITS(here.bits + 3);
                         DROPBITS(here.bits);
-                        *len_ = 0;
-                        *copy_ = 3 + BITS(3);
+                        (*len) = 0;
+                        (*copy) = 3 + BITS(3);
                         DROPBITS(3);
                     }
                     else {
                         NEEDBITS(here.bits + 7);
                         DROPBITS(here.bits);
-                        *len_ = 0;
-                        *copy_ = 11 + BITS(7);
+                        (*len) = 0;
+                        (*copy) = 11 + BITS(7);
                         DROPBITS(7);
                     }
-                    if (rstate->have + *rcopy_ > rstate->nlen + rstate->ndist) {
+                    if (rstate->have + (*copy) > rstate->nlen + rstate->ndist) {
                         wstrm->msg = (char *)"invalid bit length repeat";
                         wstate->mode = BAD;
                         break;
                     }
-                    while ((*copy_)--)
-                        wstate->lens[wstate->have++] = (unsigned short)*rlen_;
+                    while ((*copy)--)
+                        wstate->lens[wstate->have++] = (unsigned short)((*len));
                 }
             }
 
@@ -1005,9 +1005,9 @@ int flush;
         case LEN_:
             wstate->mode = LEN;
         case LEN:
-            if (*rhave_ >= 6 && *rleft_ >= 258) {
+            if ((*have) >= 6 && (*left) >= 258) {
                 RESTORE();
-                inflate_fast(pop, strm, *rout_);
+                inflate_fast(pop, strm, (*out));
                 LOAD();
                 if (wstate->mode == TYPE)
                     wstate->back = -1;
@@ -1016,7 +1016,7 @@ int flush;
             wstate->back = 0;
             for (;;) {
                 here = rstate->lencode[BITS(rstate->lenbits)];
-                if ((unsigned)(here.bits) <= *rbits_) break;
+                if ((unsigned)(here.bits) <= (*bits)) break;
                 PULLBYTE();
             }
             if (here.op && (here.op & 0xf0) == 0) {
@@ -1024,7 +1024,7 @@ int flush;
                 for (;;) {
                     here = rstate->lencode[last.val +
                             (BITS(last.bits + last.op) >> last.bits)];
-                    if ((unsigned)(last.bits + here.bits) <= *rbits_) break;
+                    if ((unsigned)(last.bits + here.bits) <= (*bits)) break;
                     PULLBYTE();
                 }
                 DROPBITS(last.bits);
@@ -1066,7 +1066,7 @@ int flush;
         case DIST:
             for (;;) {
                 here = rstate->distcode[BITS(rstate->distbits)];
-                if ((unsigned)(here.bits) <= *rbits_) break;
+                if ((unsigned)(here.bits) <= (*bits)) break;
                 PULLBYTE();
             }
             if ((here.op & 0xf0) == 0) {
@@ -1074,7 +1074,7 @@ int flush;
                 for (;;) {
                     here = rstate->distcode[last.val +
                             (BITS(last.bits + last.op) >> last.bits)];
-                    if ((unsigned)(last.bits + here.bits) <= *rbits_) break;
+                    if ((unsigned)(last.bits + here.bits) <= (*bits)) break;
                     PULLBYTE();
                 }
                 DROPBITS(last.bits);
@@ -1107,11 +1107,11 @@ int flush;
             Tracevv((stderr, "inflate:         distance %u\n", state->offset));
             wstate->mode = MATCH;
         case MATCH:
-            if (*rleft_ == 0) goto inf_leave;
-            *copy_ = *rout_ - *rleft_;
-            if (rstate->offset > *rcopy_) {         /* copy from window */
-                *copy_ = rstate->offset - *rcopy_;
-                if (*rcopy_ > rstate->whave) {
+            if ((*left) == 0) goto inf_leave;
+            (*copy) = (*out) - (*left);
+            if (rstate->offset > (*copy)) {         /* copy from window */
+                (*copy) = rstate->offset - (*copy);
+                if ((*copy) > rstate->whave) {
                     if (rstate->sane) {
                         wstrm->msg = (char *)"invalid distance too far back";
                         wstate->mode = BAD;
@@ -1131,45 +1131,45 @@ int flush;
                     break;
 #endif
                 }
-                if (*rcopy_ > rstate->wnext) {
-                    *copy_ -= rstate->wnext;
-                    from = rstate->window + (rstate->wsize - *rcopy_);
+                if ((*copy) > rstate->wnext) {
+                    (*copy) -= rstate->wnext;
+                    from = rstate->window + (rstate->wsize - (*copy));
                 }
                 else
-                    from = wstate->window + (rstate->wnext - *rcopy_);
-                if (*rcopy_ > rstate->length) *copy_ = rstate->length;
+                    from = wstate->window + (rstate->wnext - (*copy));
+                if ((*copy) > rstate->length) ((*copy)) = rstate->length;
             }
             else {                              /* copy from output */
                 from = put - rstate->offset;
-                *copy_ = rstate->length;
+                (*copy) = rstate->length;
             }
-            if (*rcopy_ > *rleft_) *copy_ = *rleft_;
-            *left_ -= *rcopy_;
-            wstate->length -= *rcopy_;
+            if ((*copy) > (*left)) ((*copy)) = (*left);
+            (*left) -= (*copy);
+            wstate->length -= (*copy);
             do {
                 *put++ = *from++;
-            } while (--(*copy_));
+            } while (--(*copy));
             if (rstate->length == 0) wstate->mode = LEN;
             break;
         case LIT:
-            if (*rleft_ == 0) goto inf_leave;
+            if ((*left) == 0) goto inf_leave;
             *put++ = (unsigned char)(wstate->length);
-            (*left_)--;
+            (*left)--;
             wstate->mode = LEN;
             break;
         case CHECK:
             if (rstate->wrap) {
                 NEEDBITS(32);
-                *out_ -= *rleft_;
-                wstrm->total_out += *rout_;
-                wstate->total += *rout_;
-                if ((rstate->wrap & 4) && *rout_)
+                (*out) -= (*left);
+                wstrm->total_out += (*out);
+                wstate->total += (*out);
+                if ((rstate->wrap & 4) && (*out))
                     wstrm->adler = wstate->check =
-                        UPDATE(rstate->check, put - *rout_, *rout_);
-                out = left;
+                        UPDATE(rstate->check, put - (*out), (*out));
+                *out = *left;
                 if ((rstate->wrap & 4) && (
 
-                     ZSWAP32(*rhold_)) != rstate->check) {
+                     ZSWAP32((*hold))) != rstate->check) {
                     wstrm->msg = (char *)"incorrect data check";
                     wstate->mode = BAD;
                     break;
@@ -1202,35 +1202,35 @@ int flush;
      */
   inf_leave:
     RESTORE();
-    if (rstate->wsize || (*rout_ != D_RO(strm)->avail_out && rstate->mode < BAD &&
+    if (rstate->wsize || ((*out) != D_RO(strm)->avail_out && rstate->mode < BAD &&
             (rstate->mode < CHECK || flush != Z_FINISH)))
-        if (updatewindow(pop, strm, wstrm->next_out, *rout_ - wstrm->avail_out)) {
+        if (updatewindow(pop, strm, wstrm->next_out, (*out) - wstrm->avail_out)) {
             wstate->mode = MEM;
             return Z_MEM_ERROR;
         }
-    *in_ -= D_RO(strm)->avail_in;
-    *out_ -= D_RO(strm)->avail_out;
-    wstrm->total_in += *rin_;
-    wstrm->total_out += *rout_;
-    wstate->total += *rout_;
-    if ((rstate->wrap & 4) && *rout_)
+    (*in) -= D_RO(strm)->avail_in;
+    (*out) -= D_RO(strm)->avail_out;
+    wstrm->total_in += (*in);
+    wstrm->total_out += (*out);
+    wstate->total += (*out);
+    if ((rstate->wrap & 4) && (*out))
         wstrm->adler = wstate->check =
-            UPDATE(rstate->check, D_RO(strm)->next_out - *rout_, *rout_);
+            UPDATE(rstate->check, D_RO(strm)->next_out - (*out), (*out));
     wstrm->data_type = (int)rstate->bits + (rstate->last ? 64 : 0) +
                       (rstate->mode == TYPE ? 128 : 0) +
                       (rstate->mode == LEN_ || rstate->mode == COPY_ ? 256 : 0);
-    if (((*rin_ == 0 && *rout_ == 0) || flush == Z_FINISH) && ret == Z_OK)
+    if ((((*in) == 0 && (*out) == 0) || flush == Z_FINISH) && ret == Z_OK)
         ret = Z_BUF_ERROR;
     pmemobj_persist(pop, D_RW(strm), sizeof(*D_RW(strm)));
     pmemobj_persist(pop, D_RW(state), sizeof(*D_RW(state)));
-    POBJ_FREE(&have);
-    POBJ_FREE(&left);
-    POBJ_FREE(&hold);
-    POBJ_FREE(&bits);
-    POBJ_FREE(&in);
-    POBJ_FREE(&out);
-    POBJ_FREE(&copy);
-    POBJ_FREE(&len);
+    POBJ_FREE(&have_);
+    POBJ_FREE(&left_);
+    POBJ_FREE(&hold_);
+    POBJ_FREE(&bits_);
+    POBJ_FREE(&in_);
+    POBJ_FREE(&out_);
+    POBJ_FREE(&copy_);
+    POBJ_FREE(&len_);
 
     return ret;
 }
@@ -1243,8 +1243,9 @@ TOID(struct z_stream) strm;
     if (inflateStateCheck(strm))
         return Z_STREAM_ERROR;
     state = D_RW(strm)->istate;
-    if (D_RO(state)->window != Z_NULL) ZFREE(D_RW(strm), D_RW(state)->window);
+    //if (D_RO(state)->window != Z_NULL) ZFREE(D_RW(strm), D_RW(state)->window);
     //ZFREE(strm, strm->state);
+    POBJ_FREE(&D_RW(strm)->windowp);
     POBJ_FREE(&state);
     POBJ_FREE(&D_RW(strm)->istate);
     //POBJ_FREE(D_RW(strm)->state)

@@ -138,6 +138,7 @@ struct z_stream {
                            for deflate, or the decoding state for inflate */
     uLong   adler;      /* Adler-32 or CRC-32 value of the uncompressed data */
     uLong   reserved;   /* reserved for future use */
+    TOID(Byte) windowp;
 };
 
 //typedef z_stream FAR *z_streamp;
