@@ -909,7 +909,7 @@ int flush;
             wstate->next = wstate->codes;
             wstate->lencode = (const code FAR *)(wstate->next);
             wstate->lenbits = 7;
-            ret = inflate_table(CODES, wstate->lens, 19, &(wstate->next),
+            ret = inflate_table(pop, CODES, wstate->lens, 19, &(wstate->next),
                                 &(wstate->lenbits), wstate->work);
             if (ret) {
                 wstrm->msg = (char *)"invalid code lengths set";
@@ -983,7 +983,7 @@ int flush;
             wstate->next = D_RW(state)->codes;
             wstate->lencode = (const code FAR *)(wstate->next);
             wstate->lenbits = 9;
-            ret = inflate_table(LENS, wstate->lens, wstate->nlen, &(wstate->next),
+            ret = inflate_table(pop, LENS, wstate->lens, wstate->nlen, &(wstate->next),
                                 &(wstate->lenbits), wstate->work);
             if (ret) {
                 wstrm->msg = (char *)"invalid literal/lengths set";
@@ -992,7 +992,7 @@ int flush;
             }
             wstate->distcode = (const code FAR *)(wstate->next);
             wstate->distbits = 6;
-            ret = inflate_table(DISTS, wstate->lens + wstate->nlen, wstate->ndist,
+            ret = inflate_table(pop, DISTS, wstate->lens + wstate->nlen, wstate->ndist,
                             &(wstate->next), &(wstate->distbits), wstate->work);
             if (ret) {
                 wstrm->msg = (char *)"invalid distances set";
