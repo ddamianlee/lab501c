@@ -532,11 +532,11 @@ unsigned copy;
 #define LOAD() \
     do { \
         put = wstrm->next_out; \
-        *left = rstrm->avail_out; \
+        *D_RW(left_) = rstrm->avail_out; \
         next = wstrm->next_in; \
-        *have = rstrm->avail_in; \
-        *hold = rstate->hold; \
-        *bits = rstate->bits; \
+        *D_RW(have_) = rstrm->avail_in; \
+        *D_RW(hold_) = rstate->hold; \
+        *D_RW(bits_) = rstate->bits; \
     } while (0)
 
 /* Restore state from registers in inflate() */
