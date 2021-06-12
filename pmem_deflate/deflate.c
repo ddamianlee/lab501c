@@ -504,11 +504,13 @@ local void fill_window(pop, s, h)
     TOID(struct deflate_state) s;
     struct hashtable *h;
 {
+    /*convert PMEMoid to direct pointer */
     const struct deflate_state *rs = D_RO(s);
     TOID(struct z_stream) strm = rs->strm;
     struct z_stream *wstrm = D_RW(strm);
     const struct z_stream *rstrm = D_RO(strm);
     struct deflate_state *ws = D_RW(s);
+    
     unsigned n;
     unsigned more;    /* Amount of free space at the end of the window. */
     uInt wsize = rs->w_size;
@@ -685,6 +687,7 @@ local uInt longest_match(s, h, cur_match)
 {
     struct deflate_state *ws = D_RW(s);
     const struct deflate_state *rs = D_RO(s);
+    
     unsigned chain_length = rs->max_chain_length;/* max hash chain length */
     register Bytef *scan = D_RW(ws->window) + rs->strstart; /* current string */
     register Bytef *match;                      /* matched string */
@@ -842,6 +845,8 @@ int ZEXPORT deflate (pop, strm, flush)
     s = wstrm->state;
     struct deflate_state *ws = D_RW(s);
     const struct deflate_state *rs = D_RO(s);
+
+
     if (rstrm->next_out == Z_NULL ||
         (rstrm->avail_in != 0 && rstrm->next_in == Z_NULL) ||
         (rs->status == FINISH_STATE && flush != Z_FINISH)) {

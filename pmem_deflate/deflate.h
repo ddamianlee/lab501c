@@ -352,20 +352,20 @@ void ZLIB_INTERNAL _tr_stored_block OF((PMEMobjpool *pop, TOID (struct deflate_s
 
 # define _tr_tally_lit(s, c, flush) \
   { uch cc = (c); \
-    D_RW(s)->d_buf[D_RO(s)->last_lit] = 0; \
-    D_RW(s)->l_buf[(D_RW(s)->last_lit)++] = cc; \
-    (D_RW(*D_RW(s)->dyn_ltree)[cc].Freq)++; \
-    flush = (D_RW(s)->last_lit == (D_RO(s)->lit_bufsize)-1); \
+    ws->d_buf[rs->last_lit] = 0; \
+    ws->l_buf[ws->last_lit++] = cc; \
+    (D_RW(*ws->dyn_ltree)[cc].Freq)++; \
+    flush = (ws->last_lit == (rs->lit_bufsize)-1); \
    }
 # define _tr_tally_dist(s, distance, length, flush) \
   { uch len = (uch)(length); \
     ush dist = (ush)(distance); \
-    D_RW(s)->d_buf[D_RO(s)->last_lit] = dist; \
-    D_RW(s)->l_buf[(D_RW(s)->last_lit++)] = len; \
+    ws->d_buf[rs->last_lit] = dist; \
+    ws->l_buf[(ws->last_lit++)] = len; \
     dist--; \
-    (D_RW(*D_RW(s)->dyn_ltree)[_length_code[len]+LITERALS+1].Freq)++; \
-    (D_RW(*D_RW(s)->dyn_dtree)[d_code(dist)].Freq)++; \
-    flush = (D_RW(s)->last_lit == (D_RO(s)->lit_bufsize)-1); \
+    (D_RW(*ws->dyn_ltree)[_length_code[len]+LITERALS+1].Freq)++; \
+    (D_RW(*ws->dyn_dtree)[d_code(dist)].Freq)++; \
+    flush = (ws->last_lit == (rs->lit_bufsize)-1); \
   }
 #else
 # define _tr_tally_lit(s, c, flush) flush = _tr_tally(s, 0, c)
