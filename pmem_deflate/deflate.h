@@ -84,7 +84,7 @@ struct ct_data {
 //typedef struct static_tree_desc_s  static_tree_desc;
 
 struct tree_desc {
-    TOID(struct ct_data) dyn_tree;           /* the dynamic tree */
+    struct ct_data *dyn_tree;           /* the dynamic tree */
     int     max_code;                         /* largest code with non zero frequency */
     struct static_tree_desc *stat_desc; /* the corresponding static tree */
 };
@@ -197,14 +197,14 @@ struct deflate_state {
                 /* used by trees.c: */
     /* Didn't use ct_data typedef below to suppress compiler warning */
 
-    TOID(struct ct_data) dyn_ltree[HEAP_SIZE];  /* literal and length tree */
-    TOID(struct ct_data) dyn_dtree[2*D_CODES+1];/* distance tree */
-    TOID(struct ct_data) bl_tree[2*BL_CODES+1]; /* Huffman tree for bit lengths */
+    struct ct_data dyn_ltree[HEAP_SIZE];  /* literal and length tree */
+    struct ct_data dyn_dtree[2*D_CODES+1];/* distance tree */
+    struct ct_data bl_tree[2*BL_CODES+1]; /* Huffman tree for bit lengths */
 
               
-    TOID(struct tree_desc) l_desc;              /* desc. for literal tree */         
-    TOID(struct tree_desc) d_desc;              /* desc. for distance tree */             
-    TOID(struct tree_desc) bl_desc;             /* desc. for bit length tree */
+    struct tree_desc l_desc;              /* desc. for literal tree */         
+    struct tree_desc d_desc;              /* desc. for distance tree */             
+    struct tree_desc bl_desc;             /* desc. for bit length tree */
 
     ush bl_count[MAX_BITS+1];
     /* number of codes at each bit length for an optimal tree */
@@ -323,7 +323,7 @@ struct hashtable
    memory checker errors from longest match routines */
 
         /* in trees.c */
-void ZLIB_INTERNAL _tr_init OF((PMEMobjpool *pop, TOID(struct deflate_state) s));
+void ZLIB_INTERNAL _tr_init OF((TOID(struct deflate_state) s));
 int ZLIB_INTERNAL _tr_tally OF((TOID(struct deflate_state) s, unsigned dist, unsigned lc));
 void ZLIB_INTERNAL _tr_flush_block OF((PMEMobjpool *pop, TOID(struct deflate_state) s, charf *buf,
                         ulg stored_len, int last));
@@ -354,7 +354,7 @@ void ZLIB_INTERNAL _tr_stored_block OF((PMEMobjpool *pop, TOID (struct deflate_s
   { uch cc = (c); \
     ws->d_buf[rs->last_lit] = 0; \
     ws->l_buf[ws->last_lit++] = cc; \
-    (D_RW(*ws->dyn_ltree)[cc].Freq)++; \
+    (ws->dyn_ltree[cc].Freq)++; \
     flush = (ws->last_lit == (rs->lit_bufsize)-1); \
    }
 # define _tr_tally_dist(s, distance, length, flush) \
@@ -363,8 +363,8 @@ void ZLIB_INTERNAL _tr_stored_block OF((PMEMobjpool *pop, TOID (struct deflate_s
     ws->d_buf[rs->last_lit] = dist; \
     ws->l_buf[(ws->last_lit++)] = len; \
     dist--; \
-    (D_RW(*ws->dyn_ltree)[_length_code[len]+LITERALS+1].Freq)++; \
-    (D_RW(*ws->dyn_dtree)[d_code(dist)].Freq)++; \
+    (ws->dyn_ltree[_length_code[len]+LITERALS+1].Freq)++; \
+    (ws->dyn_dtree[d_code(dist)].Freq)++; \
     flush = (ws->last_lit == (rs->lit_bufsize)-1); \
   }
 #else

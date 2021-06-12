@@ -355,7 +355,7 @@ int ZEXPORT deflateResetKeep (pop, strm)
     wstrm->adler = adler32(0L, Z_NULL, 0);
     ws->last_flush = Z_NO_FLUSH;
 
-    _tr_init(pop, s);
+    _tr_init(s);
     return Z_OK;
 }
 /* ========================================================================= */
@@ -371,12 +371,12 @@ int ZEXPORT deflateEnd (strm)
 
     status = D_RO(D_RO(strm)->state)->status;
     /* Deallocate tree space */
-    POBJ_FREE(&ws->dyn_ltree);
-    POBJ_FREE(&ws->l_desc);
-    POBJ_FREE(&ws->dyn_dtree);
-    POBJ_FREE(&ws->d_desc);
-    POBJ_FREE(&ws->bl_tree);
-    POBJ_FREE(&ws->bl_desc);
+    // POBJ_FREE(&ws->dyn_ltree);
+    // POBJ_FREE(&ws->l_desc);
+    // POBJ_FREE(&ws->dyn_dtree);
+    // POBJ_FREE(&ws->d_desc);
+    // POBJ_FREE(&ws->bl_tree);
+    // POBJ_FREE(&ws->bl_desc);
 
     /* Deallocate in reverse order of allocations: */
     POBJ_FREE(&rs->pending_buf);
