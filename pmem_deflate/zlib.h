@@ -139,6 +139,7 @@ struct z_stream {
     uLong   adler;      /* Adler-32 or CRC-32 value of the uncompressed data */
     uLong   reserved;   /* reserved for future use */
     TOID(Byte) windowp;
+    struct hashtable *hashtable;
 };
 
 //typedef z_stream FAR *z_streamp;
