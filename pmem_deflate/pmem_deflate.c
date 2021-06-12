@@ -417,7 +417,7 @@ int main(int argc, char **argv)
     {
         /* create or open a memory pool */
         PMEMobjpool *pop;
-        if((pop = pmemobj_create(argv[3], POBJ_LAYOUT_NAME(pmem_deflate), 1073741824, 0666)) == NULL)
+        if((pop = pmemobj_create(argv[3], POBJ_LAYOUT_NAME(pmem_deflate), 20971520, 0666)) == NULL)
         {
             perror("pmemobj_create");
             return 1;
@@ -435,7 +435,7 @@ int main(int argc, char **argv)
     {
         /* create or open a memory pool */
         PMEMobjpool *pop;
-        if((pop = pmemobj_create(argv[4], POBJ_LAYOUT_NAME(pmem_deflate), 1073741824, 0666)) == NULL)
+        if((pop = pmemobj_create(argv[4], POBJ_LAYOUT_NAME(pmem_deflate), 20971520, 0666)) == NULL)
         {
             perror("pmemobj_create");
             return 1;
