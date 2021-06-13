@@ -44,8 +44,8 @@ do_copy_to_pmem(char *pmemaddr, FILE *fp, off_t len)
 
 	/* copy the file, saving the last flush step to the end */
 	while ((cc = fread(buf, 1, CHUNK, fp)) > 0) {
-		for(int i = 0; i < 100; i++)
-            printf("%c", buf[i]);
+		//for(int i = 0; i < 100; i++)
+            //printf("%c", buf[i]);
         pmem_memcpy_nodrain(pmemaddr, buf, cc);
 		pmemaddr += cc;
 	}
@@ -72,8 +72,8 @@ do_copy_to_non_pmem(char *addr, FILE *fp, off_t len)
 
 	/* copy the file, saving the last flush step to the end */
 	while ((cc = fread(buf, 1, CHUNK, fp)) > 0) {
-		for(int i = 0; i < 100; i++)
-            printf("%c", buf[i]);
+		//for(int i = 0; i < 100; i++)
+            //printf("%c", buf[i]);
         memcpy(addr, buf, cc);
 		addr += cc;
 	}
