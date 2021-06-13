@@ -195,30 +195,30 @@ struct deflate_state {
     int nice_match; /* Stop searching when current match exceeds this */
 
                 /* used by trees.c: */
-    /* Didn't use ct_data typedef below to suppress compiler warning */
+    // /* Didn't use ct_data typedef below to suppress compiler warning */
 
-    struct ct_data dyn_ltree[HEAP_SIZE];  /* literal and length tree */
-    struct ct_data dyn_dtree[2*D_CODES+1];/* distance tree */
-    struct ct_data bl_tree[2*BL_CODES+1]; /* Huffman tree for bit lengths */
+    // struct ct_data dyn_ltree[HEAP_SIZE];  /* literal and length tree */
+    // struct ct_data dyn_dtree[2*D_CODES+1];/* distance tree */
+    // struct ct_data bl_tree[2*BL_CODES+1]; /* Huffman tree for bit lengths */
 
               
-    struct tree_desc l_desc;              /* desc. for literal tree */         
-    struct tree_desc d_desc;              /* desc. for distance tree */             
-    struct tree_desc bl_desc;             /* desc. for bit length tree */
+    // struct tree_desc l_desc;              /* desc. for literal tree */         
+    // struct tree_desc d_desc;              /* desc. for distance tree */             
+    // struct tree_desc bl_desc;             /* desc. for bit length tree */
 
-    ush bl_count[MAX_BITS+1];
-    /* number of codes at each bit length for an optimal tree */
+    // ush bl_count[MAX_BITS+1];
+    // /* number of codes at each bit length for an optimal tree */
 
-    int heap[2*L_CODES+1];      /* heap used to build the Huffman trees */
-    int heap_len;               /* number of elements in the heap */
-    int heap_max;               /* element of largest frequency */
-    /* The sons of heap[n] are heap[2*n] and heap[2*n+1]. heap[0] is not used.
-     * The same heap array is used to build all trees.
-     */
+    // int heap[2*L_CODES+1];      /* heap used to build the Huffman trees */
+    // int heap_len;               /* number of elements in the heap */
+    // int heap_max;               /* element of largest frequency */
+    // /* The sons of heap[n] are heap[2*n] and heap[2*n+1]. heap[0] is not used.
+    //  * The same heap array is used to build all trees.
+    //  */
 
-    uch depth[2*L_CODES+1];
-    /* Depth of each subtree used as tie breaker for trees of equal frequency
-     */
+    // uch depth[2*L_CODES+1];
+    // /* Depth of each subtree used as tie breaker for trees of equal frequency
+    //  */
 
     uchf *l_buf;          /* buffer for literals or lengths */
 
@@ -278,7 +278,7 @@ struct deflate_state {
 
 };
 
-struct hashtable
+struct datastruct
 {
     Posf *prev;
     /* Link to older string with same hash index. To limit the size of this
@@ -297,6 +297,30 @@ struct hashtable
      * step. It must be such that after MIN_MATCH steps, the oldest
      * byte no longer takes part in the hash key, that is:
      *   hash_shift * MIN_MATCH >= hash_bits
+     */
+    
+    /* Didn't use ct_data typedef below to suppress compiler warning */
+    struct ct_data dyn_ltree[HEAP_SIZE];  /* literal and length tree */
+    struct ct_data dyn_dtree[2*D_CODES+1];/* distance tree */
+    struct ct_data bl_tree[2*BL_CODES+1]; /* Huffman tree for bit lengths */
+
+              
+    struct tree_desc l_desc;              /* desc. for literal tree */         
+    struct tree_desc d_desc;              /* desc. for distance tree */             
+    struct tree_desc bl_desc;             /* desc. for bit length tree */
+
+    ush bl_count[MAX_BITS+1];
+    /* number of codes at each bit length for an optimal tree */
+
+    int heap[2*L_CODES+1];      /* heap used to build the Huffman trees */
+    int heap_len;               /* number of elements in the heap */
+    int heap_max;               /* element of largest frequency */
+    /* The sons of heap[n] are heap[2*n] and heap[2*n+1]. heap[0] is not used.
+     * The same heap array is used to build all trees.
+     */
+
+    uch depth[2*L_CODES+1];
+    /* Depth of each subtree used as tie breaker for trees of equal frequency
      */
 };
 //typedef struct hash_table hash;
@@ -323,9 +347,9 @@ struct hashtable
    memory checker errors from longest match routines */
 
         /* in trees.c */
-void ZLIB_INTERNAL _tr_init OF((TOID(struct deflate_state) s));
-int ZLIB_INTERNAL _tr_tally OF((TOID(struct deflate_state) s, unsigned dist, unsigned lc));
-void ZLIB_INTERNAL _tr_flush_block OF((PMEMobjpool *pop, TOID(struct deflate_state) s, charf *buf,
+void ZLIB_INTERNAL _tr_init OF((TOID(struct deflate_state) s, struct datastruct *d));
+int ZLIB_INTERNAL _tr_tally OF((TOID(struct deflate_state) s, struct datastruct *d, unsigned dist, unsigned lc));
+void ZLIB_INTERNAL _tr_flush_block OF((PMEMobjpool *pop, TOID(struct deflate_state) s, struct datastruct *d, charf *buf,
                         ulg stored_len, int last));
 void ZLIB_INTERNAL _tr_flush_bits OF((TOID(struct deflate_state) s));
 void ZLIB_INTERNAL _tr_align OF((TOID(struct deflate_state) s));
@@ -354,7 +378,7 @@ void ZLIB_INTERNAL _tr_stored_block OF((PMEMobjpool *pop, TOID (struct deflate_s
   { uch cc = (c); \
     ws->d_buf[rs->last_lit] = 0; \
     ws->l_buf[ws->last_lit++] = cc; \
-    (ws->dyn_ltree[cc].Freq)++; \
+    (d->dyn_ltree[cc].Freq)++; \
     flush = (ws->last_lit == (rs->lit_bufsize)-1); \
    }
 # define _tr_tally_dist(s, distance, length, flush) \
@@ -363,8 +387,8 @@ void ZLIB_INTERNAL _tr_stored_block OF((PMEMobjpool *pop, TOID (struct deflate_s
     ws->d_buf[rs->last_lit] = dist; \
     ws->l_buf[(ws->last_lit++)] = len; \
     dist--; \
-    (ws->dyn_ltree[_length_code[len]+LITERALS+1].Freq)++; \
-    (ws->dyn_dtree[d_code(dist)].Freq)++; \
+    (d->dyn_ltree[_length_code[len]+LITERALS+1].Freq)++; \
+    (d->dyn_dtree[d_code(dist)].Freq)++; \
     flush = (ws->last_lit == (rs->lit_bufsize)-1); \
   }
 #else

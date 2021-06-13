@@ -26,22 +26,22 @@ typedef enum {
     finish_done     /* finish done, accept no more input or output */
 } block_state;
 
-typedef block_state (*compress_func) OF((PMEMobjpool *pop, TOID(struct deflate_state) s, struct hashtable *h, int flush));
+typedef block_state (*compress_func) OF((PMEMobjpool *pop, TOID(struct deflate_state) s, struct datastruct *d, int flush));
 
 /* Compression function. Returns the block state after the call. */
 local int deflateStateCheck      OF((TOID(struct z_stream) strm));
 local void flush_pending         OF((PMEMobjpool *pop, TOID(struct z_stream) strm));
-local block_state deflate_stored OF((PMEMobjpool *pop, TOID(struct deflate_state) s, struct hashtable *h, int flush));
-local block_state deflate_fast   OF((PMEMobjpool *pop, TOID(struct deflate_state) s, struct hashtable *h, int flush));
-local block_state deflate_slow   OF((PMEMobjpool *pop, TOID(struct deflate_state) s, struct hashtable *h, int flush));
-local void lm_init               OF((TOID(struct deflate_state) s, struct hashtable *h));
+local block_state deflate_stored OF((PMEMobjpool *pop, TOID(struct deflate_state) s, struct datastruct *d, int flush));
+local block_state deflate_fast   OF((PMEMobjpool *pop, TOID(struct deflate_state) s, struct datastruct *d, int flush));
+local block_state deflate_slow   OF((PMEMobjpool *pop, TOID(struct deflate_state) s, struct datastruct *d, int flush));
+local void lm_init               OF((TOID(struct deflate_state) s, struct datastruct *d));
 local void putShortMSB           OF((TOID(struct deflate_state) s, uInt b));
-local void slide_hash            OF((TOID(struct deflate_state) s, struct hashtable *h));
-local void fill_window           OF((PMEMobjpool *pop, TOID(struct deflate_state) s, struct hashtable *h));
+local void slide_hash            OF((TOID(struct deflate_state) s, struct datastruct *d));
+local void fill_window           OF((PMEMobjpool *pop, TOID(struct deflate_state) s, struct datastruct *d));
 local unsigned read_buf          OF((PMEMobjpool *pop, TOID(struct z_stream) strm, Byte *buf, unsigned size));
-local uInt longest_match         OF((TOID(struct deflate_state) s, struct hashtable *h, IPos cur_match));
-local block_state deflate_rle    OF((PMEMobjpool *pop, TOID(struct deflate_state) s, struct hashtable *h, int flush));
-local block_state deflate_huff   OF((PMEMobjpool *pop, TOID(struct deflate_state) s, struct hashtable *h, int flush));
+local uInt longest_match         OF((TOID(struct deflate_state) s, struct datastruct *d, IPos cur_match));
+local block_state deflate_rle    OF((PMEMobjpool *pop, TOID(struct deflate_state) s, struct datastruct *d, int flush));
+local block_state deflate_huff   OF((PMEMobjpool *pop, TOID(struct deflate_state) s, struct datastruct *d, int flush));
 
 /* Values for max_lazy_match, good_match and max_chain_length, depending on
  * the desired pack level (0..9). The values given below have been tuned to
@@ -86,7 +86,7 @@ local const config configuration_table[10] = {
  *    characters, so that a running hash key can be computed from the previous
  *    key instead of complete recalculation each time.
  */
-#define UPDATE_HASH(s,i,c) (i = (((i) << h->hash_shift) ^ (c)) & h->hash_mask)
+#define UPDATE_HASH(s,h,c) (h = (((h) << d->hash_shift) ^ (c)) & d->hash_mask)
 
 
 /* ===========================================================================
@@ -100,9 +100,9 @@ local const config configuration_table[10] = {
  *    the last MIN_MATCH-1 bytes of the input file).
  */
 #define INSERT_STRING(s, str, match_head) \
-   (UPDATE_HASH(s, h->ins_h, D_RW(ws->window)[(str) + (MIN_MATCH-1)]), \
-    match_head = h->prev[(str) & rs->w_mask] = h->head[h->ins_h], \
-    h->head[h->ins_h] = (Pos)(str))
+   (UPDATE_HASH(s, d->ins_h, D_RW(ws->window)[(str) + (MIN_MATCH-1)]), \
+    match_head = d->prev[(str) & rs->w_mask] = d->head[d->ins_h], \
+    d->head[d->ins_h] = (Pos)(str))
 
 
 
@@ -110,9 +110,9 @@ local const config configuration_table[10] = {
  * Initialize the hash table (avoiding 64K overflow for 16 bit systems).
  * prev[] will be initialized on the fly.
  */
- #define CLEAR_HASH(h) \
-     h->head[h->hash_size-1] = NIL; \
-     zmemzero((Bytef *)h->head, (unsigned)(h->hash_size-1)*sizeof(*h->head));
+ #define CLEAR_HASH(d) \
+     d->head[d->hash_size-1] = NIL; \
+     zmemzero((Bytef *)d->head, (unsigned)(d->hash_size-1)*sizeof(*d->head));
 
 // #define CLEAR_HASH(s) \
 //     ws->head[rs->hash_size-1] = NIL; \
@@ -219,7 +219,7 @@ int ZEXPORT deflateInit2_(pop, strm, level, method, windowBits, memLevel, strate
     }
     if (windowBits == 8) windowBits = 9;  /* until 256-byte window bug fixed */
     
-    struct hashtable *h = malloc(sizeof(struct hashtable));
+    struct datastruct *d = malloc(sizeof(struct datastruct));
 
     /* deflate_state allocation */
     TOID(struct deflate_state) s;
@@ -232,7 +232,7 @@ int ZEXPORT deflateInit2_(pop, strm, level, method, windowBits, memLevel, strate
     const struct deflate_state *rs = D_RO(s);
 
     wstrm->state = s;
-    wstrm->hashtable = h;
+    wstrm->hashtable = d;
     ws->strm = strm;
     ws->status = INIT_STATE;     /* to pass state test in deflateReset() */
 
@@ -242,16 +242,16 @@ int ZEXPORT deflateInit2_(pop, strm, level, method, windowBits, memLevel, strate
     ws->w_size = 1 << rs->w_bits;
     ws->w_mask = rs->w_size - 1;
 
-    h->hash_bits = (uInt)memLevel + 7;
-    h->hash_size = 1 << h->hash_bits;
-    h->hash_mask = h->hash_size - 1;
-    h->hash_shift =  ((h->hash_bits+MIN_MATCH-1)/MIN_MATCH);
+    d->hash_bits = (uInt)memLevel + 7;
+    d->hash_size = 1 << d->hash_bits;
+    d->hash_mask = d->hash_size - 1;
+    d->hash_shift =  ((d->hash_bits+MIN_MATCH-1)/MIN_MATCH);
 
     //ws->window = (Bytef *) ZALLOC(rstrm, rs->w_size, 2*sizeof(Byte));
     //ws->prev   = (Posf *)  ZALLOC(rstrm, rs->w_size, sizeof(Pos));
-    h->prev = (Posf *)malloc(rs->w_size * sizeof(Pos));
+    d->prev = (Posf *)malloc(rs->w_size * sizeof(Pos));
     //ws->head   = (Posf *)  ZALLOC(rstrm, rs->hash_size, sizeof(Pos));
-    h->head = (Posf *)malloc(h->hash_size * sizeof(Pos));
+    d->head = (Posf *)malloc(d->hash_size * sizeof(Pos));
     
     ws->high_water = 0;      /* nothing written to s->window yet */
     ws->lit_bufsize = 1 << (memLevel + 6); /* 16K elements by default */
@@ -295,7 +295,7 @@ int ZEXPORT deflateInit2_(pop, strm, level, method, windowBits, memLevel, strate
     ws->pending_buf_size = (ulg)rs->lit_bufsize * (sizeof(ush)+2L);
 
 
-    if (D_RO(rs->window) == Z_NULL || h->prev == Z_NULL || h->head == Z_NULL ||
+    if (D_RO(rs->window) == Z_NULL || d->prev == Z_NULL || d->head == Z_NULL ||
           D_RO(rs->pending_buf) == Z_NULL) 
     {
         ws->status = FINISH_STATE;
@@ -355,7 +355,7 @@ int ZEXPORT deflateResetKeep (pop, strm)
     wstrm->adler = adler32(0L, Z_NULL, 0);
     ws->last_flush = Z_NO_FLUSH;
 
-    _tr_init(s);
+    _tr_init(s, wstrm->hashtable);
     return Z_OK;
 }
 /* ========================================================================= */
@@ -363,7 +363,7 @@ int ZEXPORT deflateEnd (strm)
     TOID(struct z_stream) strm;
 {
     int status;
-    struct hashtable *h = D_RW(strm)->hashtable; 
+    struct datastruct *d = D_RW(strm)->hashtable; 
     TOID(struct deflate_state) s = D_RW(strm)->state;
     struct deflate_state *ws = D_RW(s);
     const struct deflate_state *rs = D_RO(s);
@@ -383,8 +383,8 @@ int ZEXPORT deflateEnd (strm)
     //POBJ_FREE(&rs->head);
     //POBJ_FREE(&rs->prev);
     //TRY_FREE(D_RW(strm), ws->head);
-    free(h->head);
-    free(h->prev);
+    free(d->head);
+    free(d->prev);
     ZFREE(D_RW(strm), D_RW(strm)->hashtable);
     //TRY_FREE(D_RW(strm), ws->prev);
     POBJ_FREE(&rs->window);
@@ -395,15 +395,15 @@ int ZEXPORT deflateEnd (strm)
 /* ===========================================================================
  * Initialize the "longest match" routines for a new zlib stream
  */
-local void lm_init (s, h)
+local void lm_init (s, d)
     TOID(struct deflate_state) s;
-    struct hashtable *h;
+    struct datastruct *d;
 {
     struct deflate_state *ws = D_RW(s);
     const struct deflate_state *rs = D_RO(s);
     ws->window_size = (ulg)2L*(rs->w_size);
 
-    CLEAR_HASH(h) 
+    CLEAR_HASH(d) 
     // h->head[h->hash_size-1] = NIL; 
     // memset((Bytef *)h->head, 0, (unsigned)(h->hash_size-1)*sizeof(*h->head));
 
@@ -420,16 +420,16 @@ local void lm_init (s, h)
     ws->insert = 0;
     ws->match_length = ws->prev_length = MIN_MATCH-1;
     ws->match_available = 0;
-    h->ins_h = 0;
+    d->ins_h = 0;
 }
 /* ===========================================================================
  * Slide the hash table when sliding the window down (could be avoided with 32
  * bit values at the expense of memory usage). We slide even when level == 0 to
  * keep the hash table consistent if we switch back to level > 0 later.
  */
-local void slide_hash(s, h)
+local void slide_hash(s, d)
     TOID(struct deflate_state) s;
-    struct hashtable *h;
+    struct datastruct *d;
 {
     //struct deflate_state *ws = D_RW(s);
     const struct deflate_state *rs = D_RO(s);
@@ -437,15 +437,15 @@ local void slide_hash(s, h)
     Posf *p;
     uInt wsize = rs->w_size;
 
-    n = h->hash_size;
-    p = &h->head[n];
+    n = d->hash_size;
+    p = &d->head[n];
     do {
         m = *--p;
         *p = (Pos)(m >= wsize ? m - wsize : NIL);
     } while (--n);
     n = wsize;
 #ifndef FASTEST
-    p = &h->prev[n];
+    p = &d->prev[n];
     do {
         m = *--p;
         *p = (Pos)(m >= wsize ? m - wsize : NIL);
@@ -499,10 +499,10 @@ local unsigned read_buf(pop, strm, buf, size)
  *    performed for at least two bytes (required for the zip translate_eol
  *    option -- not supported here).
  */
-local void fill_window(pop, s, h)
+local void fill_window(pop, s, d)
     PMEMobjpool *pop;
     TOID(struct deflate_state) s;
-    struct hashtable *h;
+    struct datastruct *d;
 {
     /*convert PMEMoid to direct pointer */
     const struct deflate_state *rs = D_RO(s);
@@ -541,7 +541,7 @@ local void fill_window(pop, s, h)
             ws->match_start -= wsize;
             ws->strstart    -= wsize; /* we now have strstart >= MAX_DIST */
             ws->block_start -= (long) wsize;
-            slide_hash(s, h);
+            slide_hash(s, d);
             more += wsize;
         }
         if (rstrm->avail_in == 0) break;
@@ -565,17 +565,17 @@ local void fill_window(pop, s, h)
         /* Initialize the hash value now that we have some input: */
         if (rs->lookahead + rs->insert >= MIN_MATCH) {
             uInt str = rs->strstart - rs->insert;
-            h->ins_h = D_RO(rs->window)[str];
-            UPDATE_HASH(s, h->ins_h, D_RW(ws->window)[str + 1]);
+            d->ins_h = D_RO(rs->window)[str];
+            UPDATE_HASH(s, d->ins_h, D_RW(ws->window)[str + 1]);
 #if MIN_MATCH != 3
             Call UPDATE_HASH() MIN_MATCH-3 more times
 #endif
             while (rs->insert) {
-                UPDATE_HASH(s, h->ins_h, D_RW(ws->window)[str + MIN_MATCH-1]);
+                UPDATE_HASH(s, d->ins_h, D_RW(ws->window)[str + MIN_MATCH-1]);
 #ifndef FASTEST
-                h->prev[str & rs->w_mask] = h->head[h->ins_h];
+                d->prev[str & rs->w_mask] = d->head[d->ins_h];
 #endif
-                h->head[h->ins_h] = (Pos)str;
+                d->head[d->ins_h] = (Pos)str;
                 str++;
                 (ws->insert)--;
                 if (rs->lookahead + rs->insert < MIN_MATCH)
@@ -680,9 +680,9 @@ local void flush_pending(pop, strm)
  * OUT assertion: the match length is not greater than s->lookahead.
  */
 
-local uInt longest_match(s, h, cur_match)
+local uInt longest_match(s, d, cur_match)
     TOID(struct deflate_state) s;
-    struct hashtable *h;
+    struct datastruct *d;
     IPos cur_match;                             /* current match */
 {
     struct deflate_state *ws = D_RW(s);
@@ -699,7 +699,7 @@ local uInt longest_match(s, h, cur_match)
     /* Stop when cur_match becomes <= limit. To simplify the code,
      * we prevent matches with the string of window index 0.
      */
-    Posf *prev = h->prev;
+    Posf *prev = d->prev;
     uInt wmask = rs->w_mask;
 
 #ifdef UNALIGNED_OK
@@ -841,7 +841,7 @@ int ZEXPORT deflate (pop, strm, flush)
     if (deflateStateCheck(strm) || flush > Z_BLOCK || flush < 0) {
         return Z_STREAM_ERROR;
     }
-    struct hashtable *h = wstrm->hashtable;
+    struct datastruct *d = wstrm->hashtable;
     s = wstrm->state;
     struct deflate_state *ws = D_RW(s);
     const struct deflate_state *rs = D_RO(s);
@@ -926,10 +926,10 @@ int ZEXPORT deflate (pop, strm, flush)
     if (rstrm->avail_in != 0 || rs->lookahead != 0 ||
         (flush != Z_NO_FLUSH && rs->status != FINISH_STATE)) {
         block_state bstate;
-        bstate = rs->level == 0 ? deflate_stored(pop, s, h, flush) :
-                 rs->strategy == Z_HUFFMAN_ONLY ? deflate_huff(pop, s, h, flush) :
-                 rs->strategy == Z_RLE ? deflate_rle(pop, s, h, flush) :
-                 (*(configuration_table[rs->level].func))(pop, s, h, flush);
+        bstate = rs->level == 0 ? deflate_stored(pop, s, d, flush) :
+                 rs->strategy == Z_HUFFMAN_ONLY ? deflate_huff(pop, s, d, flush) :
+                 rs->strategy == Z_RLE ? deflate_rle(pop, s, d, flush) :
+                 (*(configuration_table[rs->level].func))(pop, s, d, flush);
 
         if (bstate == finish_started || bstate == finish_done) {
             ws->status = FINISH_STATE;
@@ -956,7 +956,7 @@ int ZEXPORT deflate (pop, strm, flush)
                  * as a special marker by inflate_sync().
                  */
                 if (flush == Z_FULL_FLUSH) {
-                    CLEAR_HASH(h)             /* forget history */
+                    CLEAR_HASH(d)             /* forget history */
                     //ws->head[rs->hash_size-1] = NIL;
                     //memset((Bytef *)ws->head, 0, (unsigned)(ws->hash_size-1)*sizeof(*rs->head));
                     
@@ -994,8 +994,8 @@ int ZEXPORT deflate (pop, strm, flush)
  * Flush the current block, with given end-of-file flag.
  * IN assertion: strstart is set to the end of the current match.
  */
-#define FLUSH_BLOCK_ONLY(s, last) { \
-   _tr_flush_block(pop, s, (rs->block_start >= 0L ? \
+#define FLUSH_BLOCK_ONLY(s, d, last) { \
+   _tr_flush_block(pop, s, d, (rs->block_start >= 0L ? \
                    (charf *)&(D_RW(ws->window)[(unsigned)rs->block_start]) : \
                    (charf *)Z_NULL), \
                 (ulg)((long)rs->strstart - rs->block_start), \
@@ -1006,8 +1006,8 @@ int ZEXPORT deflate (pop, strm, flush)
 }
 
 /* Same but force premature exit if necessary. */
-#define FLUSH_BLOCK(s, last) { \
-   FLUSH_BLOCK_ONLY(s, last); \
+#define FLUSH_BLOCK(s, d, last) { \
+   FLUSH_BLOCK_ONLY(s, d, last); \
    if (D_RO(rs->strm)->avail_out == 0) return (last) ? finish_started : need_more; \
 }
 
@@ -1021,10 +1021,10 @@ int ZEXPORT deflate (pop, strm, flush)
  * evaluation for matches: a match is finally adopted only if there is
  * no better match at the next window position.
  */
-local block_state deflate_slow(pop, s, h, flush)
+local block_state deflate_slow(pop, s, d, flush)
     PMEMobjpool *pop;
     TOID(struct deflate_state) s;
-    struct hashtable *h;
+    struct datastruct *d;
     int flush;
 {
     struct deflate_state *ws = D_RW(s);
@@ -1040,7 +1040,7 @@ local block_state deflate_slow(pop, s, h, flush)
          * string following the next match.
          */
         if (rs->lookahead < MIN_LOOKAHEAD) {
-            fill_window(pop, s, h);
+            fill_window(pop, s, d);
             if (rs->lookahead < MIN_LOOKAHEAD && flush == Z_NO_FLUSH) {
                 return need_more;
             }
@@ -1066,7 +1066,7 @@ local block_state deflate_slow(pop, s, h, flush)
              * of window index 0 (in particular we have to avoid a match
              * of the string with itself at the start of the input file).
              */
-            ws->match_length = longest_match (s, h, hash_head);
+            ws->match_length = longest_match (s, d, hash_head);
             /* longest_match() sets match_start */
 
             if (rs->match_length <= 5 && (rs->strategy == Z_FILTERED
@@ -1109,7 +1109,7 @@ local block_state deflate_slow(pop, s, h, flush)
             ws->match_length = MIN_MATCH-1;
             ws->strstart++;
 
-            if (bflush) FLUSH_BLOCK(s, 0);
+            if (bflush) FLUSH_BLOCK(s, d, 0);
 
         } else if (rs->match_available) {
             /* If there was no match at the previous position, output a
@@ -1119,7 +1119,7 @@ local block_state deflate_slow(pop, s, h, flush)
             //Tracevv((stderr,"%c", rs->window[rs->strstart-1]));
             _tr_tally_lit(s, D_RW(ws->window)[rs->strstart-1], bflush);
             if (bflush) {
-                FLUSH_BLOCK_ONLY(s, 0);
+                FLUSH_BLOCK_ONLY(s, d, 0);
             }
             ws->strstart++;
             ws->lookahead--;
@@ -1141,11 +1141,11 @@ local block_state deflate_slow(pop, s, h, flush)
     }
     ws->insert = rs->strstart < MIN_MATCH-1 ? rs->strstart : MIN_MATCH-1;
     if (flush == Z_FINISH) {
-        FLUSH_BLOCK(s, 1);
+        FLUSH_BLOCK(s, d, 1);
         return finish_done;
     }
     if (rs->last_lit)
-        FLUSH_BLOCK(s, 0);
+        FLUSH_BLOCK(s, d, 0);
     return block_done;
 }
 /* =========================================================================
@@ -1223,10 +1223,10 @@ local block_state deflate_slow(pop, s, h, flush)
  * copied. It is most efficient with large input and output buffers, which
  * maximizes the opportunites to have a single copy from next_in to next_out.
  */
-local block_state deflate_stored(pop, s, h, flush)
+local block_state deflate_stored(pop, s, d, flush)
     PMEMobjpool *pop;
     TOID(struct deflate_state) s;
-    struct hashtable *h;
+    struct datastruct *d;
     int flush;
 {
     struct deflate_state *ws = D_RW(s);
@@ -1408,10 +1408,10 @@ local block_state deflate_stored(pop, s, h, flush)
  * new strings in the dictionary only for unmatched strings or for short
  * matches. It is used only for the fast compression options.
  */
-local block_state deflate_fast(pop, s, h, flush)
+local block_state deflate_fast(pop, s, d, flush)
     PMEMobjpool *pop;
     TOID(struct deflate_state) s;
-    struct hashtable *h;
+    struct datastruct *d;
     int flush;
 {
     struct deflate_state *ws = D_RW(s);
@@ -1426,7 +1426,7 @@ local block_state deflate_fast(pop, s, h, flush)
          * string following the next match.
          */
         if (rs->lookahead < MIN_LOOKAHEAD) {
-            fill_window(pop, s, h);
+            fill_window(pop, s, d);
             if (rs->lookahead < MIN_LOOKAHEAD && flush == Z_NO_FLUSH) {
                 return need_more;
             }
@@ -1449,7 +1449,7 @@ local block_state deflate_fast(pop, s, h, flush)
              * of window index 0 (in particular we have to avoid a match
              * of the string with itself at the start of the input file).
              */
-            ws->match_length = longest_match (s, h, hash_head);
+            ws->match_length = longest_match (s, d, hash_head);
             /* longest_match() sets match_start */
         }
         if (rs->match_length >= MIN_MATCH) {
@@ -1480,8 +1480,8 @@ local block_state deflate_fast(pop, s, h, flush)
             {
                 ws->strstart += rs->match_length;
                 ws->match_length = 0;
-                h->ins_h = D_RO(rs->window)[rs->strstart];
-                UPDATE_HASH(s, h->ins_h, D_RO(rs->window)[rs->strstart+1]);
+                d->ins_h = D_RO(rs->window)[rs->strstart];
+                UPDATE_HASH(s, d->ins_h, D_RO(rs->window)[rs->strstart+1]);
 #if MIN_MATCH != 3
                 Call UPDATE_HASH() MIN_MATCH-3 more times
 #endif
@@ -1496,15 +1496,15 @@ local block_state deflate_fast(pop, s, h, flush)
             ws->lookahead--;
             ws->strstart++;
         }
-        if (bflush) FLUSH_BLOCK(s, 0);
+        if (bflush) FLUSH_BLOCK(s, d, 0);
     }
     ws->insert = rs->strstart < MIN_MATCH-1 ? rs->strstart : MIN_MATCH-1;
     if (flush == Z_FINISH) {
-        FLUSH_BLOCK(s, 1);
+        FLUSH_BLOCK(s, d, 1);
         return finish_done;
     }
     if (rs->last_lit)
-        FLUSH_BLOCK(s, 0);
+        FLUSH_BLOCK(s, d, 0);
     return block_done;
 }
 
@@ -1513,10 +1513,10 @@ local block_state deflate_fast(pop, s, h, flush)
  * one.  Do not maintain a hash table.  (It will be regenerated if this run of
  * deflate switches away from Z_RLE.)
  */
-local block_state deflate_rle(pop, s, h, flush)
+local block_state deflate_rle(pop, s, d, flush)
     PMEMobjpool *pop;
     TOID(struct deflate_state) s;
-    struct hashtable *h;
+    struct datastruct *d;
     int flush;
 {
     struct deflate_state *ws = D_RW(s);
@@ -1531,7 +1531,7 @@ local block_state deflate_rle(pop, s, h, flush)
          * for the longest run, plus one for the unrolled loop.
          */
         if (rs->lookahead <= MAX_MATCH) {
-            fill_window(pop, s, h);
+            fill_window(pop, s, d);
             if (rs->lookahead <= MAX_MATCH && flush == Z_NO_FLUSH) {
                 return need_more;
             }
@@ -1574,15 +1574,15 @@ local block_state deflate_rle(pop, s, h, flush)
             ws->lookahead--;
             ws->strstart++;
         }
-        if (bflush) FLUSH_BLOCK(s, 0);
+        if (bflush) FLUSH_BLOCK(s, d, 0);
     }
     ws->insert = 0;
     if (flush == Z_FINISH) {
-        FLUSH_BLOCK(s, 1);
+        FLUSH_BLOCK(s, d, 1);
         return finish_done;
     }
     if (rs->last_lit)
-        FLUSH_BLOCK(s, 0);
+        FLUSH_BLOCK(s, d, 0);
     return block_done;
 }
 
@@ -1590,10 +1590,10 @@ local block_state deflate_rle(pop, s, h, flush)
  * For Z_HUFFMAN_ONLY, do not look for matches.  Do not maintain a hash table.
  * (It will be regenerated if this run of deflate switches away from Huffman.)
  */
-local block_state deflate_huff(pop, s, h, flush)
+local block_state deflate_huff(pop, s, d, flush)
     PMEMobjpool *pop;
     TOID(struct deflate_state) s;
-    struct hashtable *h;
+    struct datastruct *d;
     int flush;
 {
     struct deflate_state *ws = D_RW(s);
@@ -1603,7 +1603,7 @@ local block_state deflate_huff(pop, s, h, flush)
     for (;;) {
         /* Make sure that we have a literal to write. */
         if (rs->lookahead == 0) {
-            fill_window(pop, s, h);
+            fill_window(pop, s, d);
             if (rs->lookahead == 0) {
                 if (flush == Z_NO_FLUSH)
                     return need_more;
@@ -1617,14 +1617,14 @@ local block_state deflate_huff(pop, s, h, flush)
         _tr_tally_lit (s, D_RO(rs->window)[rs->strstart], bflush);
         ws->lookahead--;
         ws->strstart++;
-        if (bflush) FLUSH_BLOCK(s, 0);
+        if (bflush) FLUSH_BLOCK(s, d, 0);
     }
     ws->insert = 0;
     if (flush == Z_FINISH) {
-        FLUSH_BLOCK(s, 1);
+        FLUSH_BLOCK(s, d, 1);
         return finish_done;
     }
     if (rs->last_lit)
-        FLUSH_BLOCK(s, 0);
+        FLUSH_BLOCK(s, d, 0);
     return block_done;
 }
