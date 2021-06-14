@@ -153,8 +153,8 @@ local void send_all_trees OF((TOID(struct deflate_state) s, int lcodes, int dcod
                               int blcodes));
 local void compress_block OF((TOID(struct deflate_state) s, const struct ct_data *ltree,
                               const struct ct_data *dtree));
-local void compress_block_static OF((TOID(struct deflate_state) s, const struct ct_data *ltree, 
-                                const struct ct_data *dtree));
+// local void compress_block_static OF((TOID(struct deflate_state) s, const struct ct_data *ltree, 
+//                                 const struct ct_data *dtree));
 local int  detect_data_type OF((TOID(struct deflate_state) s));
 local unsigned bi_reverse OF((unsigned value, int length));
 local void bi_windup      OF((TOID(struct deflate_state) s));
@@ -702,7 +702,7 @@ local void build_tree(pop, s, desc)
 
     for (n = 0; n < elems; n++) {
         if (tree[n].Freq != 0) {
-            ws->heap[++ws->heap_len] = max_code = n;
+            ws->heap[++(ws->heap_len)] = max_code = n;
             ws->depth[n] = 0;
         } else {
             tree[n].Len = 0;
@@ -715,7 +715,7 @@ local void build_tree(pop, s, desc)
      * two codes of non zero frequency.
      */
     while (rs->heap_len < 2) {
-        node = ws->heap[++ws->heap_len] = (max_code < 2 ? ++max_code : 0);
+        node = ws->heap[++(ws->heap_len)] = (max_code < 2 ? ++max_code : 0);
         tree[node].Freq = 1;
         ws->depth[node] = 0;
         ws->opt_len--; if (stree) ws->static_len -= stree[node].Len;
@@ -1203,58 +1203,58 @@ local void compress_block(s, ltree, dtree)
 /* ===========================================================================
  * Send the block data compressed using the given Huffman trees
  */
-local void compress_block_static(s, ltree, dtree)
-    TOID(struct deflate_state) s;
-    const struct ct_data *ltree; /* literal tree */
-    const struct ct_data *dtree; /* distance tree */
-{
-    struct deflate_state *ws = D_RW(s);
-    const struct deflate_state *rs = D_RO(s);
-    unsigned dist;      /* distance of matched string */
-    int lc;             /* match length or unmatched char (if dist == 0) */
-    unsigned lx = 0;    /* running index in l_buf */
-    unsigned code;      /* the code to send */
-    int extra;          /* number of extra bits to send */
+// local void compress_block_static(s, ltree, dtree)
+//     TOID(struct deflate_state) s;
+//     const struct ct_data *ltree; /* literal tree */
+//     const struct ct_data *dtree; /* distance tree */
+// {
+//     struct deflate_state *ws = D_RW(s);
+//     const struct deflate_state *rs = D_RO(s);
+//     unsigned dist;      /* distance of matched string */
+//     int lc;             /* match length or unmatched char (if dist == 0) */
+//     unsigned lx = 0;    /* running index in l_buf */
+//     unsigned code;      /* the code to send */
+//     int extra;          /* number of extra bits to send */
 
-    if (ws->last_lit != 0) do {
-        dist = rs->d_buf[lx];
-        lc = rs->l_buf[lx++];
-        if (dist == 0) {
-            //send_code(s, lc, ltree); /* send a literal byte */
-            send_bits(s, ltree[lc].Code, ltree[lc].Len);
-            //Tracecv(isgraph(lc), (stderr," '%c' ", lc));
-        } else {
-            /* Here, lc is the match length - MIN_MATCH */
-            code = _length_code[lc];
-            //send_code(s, code+LITERALS+1, ltree); /* send the length code */
-            send_bits(s, ltree[code+LITERALS+1].Code, ltree[code+LITERALS+1].Len);
-            extra = extra_lbits[code];
-            if (extra != 0) {
-                lc -= base_length[code];
-                send_bits(s, lc, extra);       /* send the extra length bits */
-            }
-            dist--; /* dist is now the match distance - 1 */
-            code = d_code(dist);
-            Assert (code < D_CODES, "bad d_code");
+//     if (ws->last_lit != 0) do {
+//         dist = rs->d_buf[lx];
+//         lc = rs->l_buf[lx++];
+//         if (dist == 0) {
+//             //send_code(s, lc, ltree); /* send a literal byte */
+//             send_bits(s, ltree[lc].Code, ltree[lc].Len);
+//             //Tracecv(isgraph(lc), (stderr," '%c' ", lc));
+//         } else {
+//             /* Here, lc is the match length - MIN_MATCH */
+//             code = _length_code[lc];
+//             //send_code(s, code+LITERALS+1, ltree); /* send the length code */
+//             send_bits(s, ltree[code+LITERALS+1].Code, ltree[code+LITERALS+1].Len);
+//             extra = extra_lbits[code];
+//             if (extra != 0) {
+//                 lc -= base_length[code];
+//                 send_bits(s, lc, extra);       /* send the extra length bits */
+//             }
+//             dist--; /* dist is now the match distance - 1 */
+//             code = d_code(dist);
+//             Assert (code < D_CODES, "bad d_code");
 
-            //send_code(s, code, dtree);       /* send the distance code */
-            send_bits(s, dtree[code].Code, dtree[code].Len);
-            extra = extra_dbits[code];
-            if (extra != 0) {
-                dist -= (unsigned)base_dist[code];
-                send_bits(s, dist, extra);   /* send the extra distance bits */
-            }
-        } /* literal or match pair ? */
+//             //send_code(s, code, dtree);       /* send the distance code */
+//             send_bits(s, dtree[code].Code, dtree[code].Len);
+//             extra = extra_dbits[code];
+//             if (extra != 0) {
+//                 dist -= (unsigned)base_dist[code];
+//                 send_bits(s, dist, extra);   /* send the extra distance bits */
+//             }
+//         } /* literal or match pair ? */
 
-        /* Check that the overlay between pending_buf and d_buf+l_buf is ok: */
-        Assert((uInt)(rs->pending) < s->lit_bufsize + 2*lx,
-               "pendingBuf overflow");
+//         /* Check that the overlay between pending_buf and d_buf+l_buf is ok: */
+//         Assert((uInt)(rs->pending) < s->lit_bufsize + 2*lx,
+//                "pendingBuf overflow");
 
-    } while (lx < rs->last_lit);
+//     } while (lx < rs->last_lit);
 
-    //send_code(s, END_BLOCK, ltree);
-    send_bits(s, ltree[END_BLOCK].Code, ltree[END_BLOCK].Len);
-}
+//     //send_code(s, END_BLOCK, ltree);
+//     send_bits(s, ltree[END_BLOCK].Code, ltree[END_BLOCK].Len);
+// }
 /* ===========================================================================
  * Check if the data type is TEXT or BINARY, using the following algorithm:
  * - TEXT if the two conditions below are satisfied:
