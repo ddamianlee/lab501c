@@ -331,7 +331,7 @@ struct datastruct
 /* Output a byte on the stream.
  * IN assertion: there is enough room in pending_buf.
  */
-#define put_byte(s, c) {D_RW(D_RW(s)->pending_buf)[((D_RW(s)->pending)++)] = (Bytef)(c);}
+#define put_byte(s, c) {D_RW(ws->pending_buf)[(ws->pending)++] = (Bytef)(c);}
 
 
 #define MIN_LOOKAHEAD (MAX_MATCH+MIN_MATCH+1)
@@ -339,7 +339,7 @@ struct datastruct
  * See deflate.c for comments about the MIN_MATCH+1.
  */
 
-#define MAX_DIST(s)  ((D_RO(s)->w_size)-MIN_LOOKAHEAD)
+#define MAX_DIST(s)  ((rs->w_size)-MIN_LOOKAHEAD)
 /* In order to simplify the code, particularly on 16 bit machines, match
  * distances are limited to MAX_DIST instead of WSIZE.
  */

@@ -36,7 +36,7 @@ local block_state deflate_fast   OF((PMEMobjpool *pop, TOID(struct deflate_state
 local block_state deflate_slow   OF((PMEMobjpool *pop, TOID(struct deflate_state) s, struct datastruct *d, int flush));
 local void lm_init               OF((TOID(struct deflate_state) s, struct datastruct *d));
 local void putShortMSB           OF((TOID(struct deflate_state) s, uInt b));
-local void slide_hash            OF((TOID(struct deflate_state) s, struct datastruct *d));
+local void slide_hash            OF((uInt wsize, struct datastruct *d));
 local void fill_window           OF((PMEMobjpool *pop, TOID(struct deflate_state) s, struct datastruct *d));
 local unsigned read_buf          OF((PMEMobjpool *pop, TOID(struct z_stream) strm, Byte *buf, unsigned size));
 local uInt longest_match         OF((TOID(struct deflate_state) s, struct datastruct *d, IPos cur_match));
@@ -427,15 +427,15 @@ local void lm_init (s, d)
  * bit values at the expense of memory usage). We slide even when level == 0 to
  * keep the hash table consistent if we switch back to level > 0 later.
  */
-local void slide_hash(s, d)
-    TOID(struct deflate_state) s;
+local void slide_hash(wsize, d)
+    uInt wsize;
     struct datastruct *d;
 {
     //struct deflate_state *ws = D_RW(s);
-    const struct deflate_state *rs = D_RO(s);
+    //const struct deflate_state *rs = D_RO(s);
     unsigned n, m;
     Posf *p;
-    uInt wsize = rs->w_size;
+    //uInt wsize = rs->w_size;
 
     n = d->hash_size;
     p = &d->head[n];
@@ -541,7 +541,7 @@ local void fill_window(pop, s, d)
             ws->match_start -= wsize;
             ws->strstart    -= wsize; /* we now have strstart >= MAX_DIST */
             ws->block_start -= (long) wsize;
-            slide_hash(s, d);
+            slide_hash(rs->w_size, d);
             more += wsize;
         }
         if (rstrm->avail_in == 0) break;
@@ -634,6 +634,7 @@ local void putShortMSB (s, b)
     TOID(struct deflate_state) s;
     uInt b;
 {
+    struct deflate_state *ws = D_RW(s);
     put_byte(s, (Byte)(b >> 8));
     put_byte(s, (Byte)(b & 0xff));
 }
