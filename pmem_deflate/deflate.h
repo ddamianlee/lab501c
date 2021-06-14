@@ -100,9 +100,9 @@ typedef unsigned IPos;
 struct deflate_state {
     TOID(struct z_stream) strm;      /* pointer back to this zlib stream */
     int   status;                    /* as the name implies */
-    TOID(Byte) pending_buf;          /* output still pending */
+    Byte *pending_buf;          /* output still pending */
     ulg   pending_buf_size;          /* size of pending_buf */
-    TOID(Byte) pending_out;          /* next pending byte to output to the stream */
+    Byte *pending_out;          /* next pending byte to output to the stream */
     ulg   pending;                   /* nb of bytes in the pending buffer */
     int   wrap;                      /* bit 0 true for zlib, bit 1 true for gzip */
     //gz_headerp  gzhead;              /* gzip header information to write */
@@ -331,7 +331,7 @@ struct datastruct
 /* Output a byte on the stream.
  * IN assertion: there is enough room in pending_buf.
  */
-#define put_byte(s, c) {D_RW(ws->pending_buf)[(ws->pending)++] = (Bytef)(c);}
+#define put_byte(s, c) {ws->pending_buf[ws->pending++] = (Bytef)(c);}
 
 
 #define MIN_LOOKAHEAD (MAX_MATCH+MIN_MATCH+1)
@@ -381,17 +381,17 @@ void ZLIB_INTERNAL _tr_stored_block OF((PMEMobjpool *pop, TOID (struct deflate_s
     ws->d_buf[rs->last_lit] = 0; \
     ws->l_buf[ws->last_lit++] = cc; \
     (d->dyn_ltree[cc].Freq)++; \
-    flush = (ws->last_lit == (rs->lit_bufsize)-1); \
+    flush = (ws->last_lit == rs->lit_bufsize-1); \
    }
 # define _tr_tally_dist(s, distance, length, flush) \
   { uch len = (uch)(length); \
     ush dist = (ush)(distance); \
     ws->d_buf[rs->last_lit] = dist; \
-    ws->l_buf[(ws->last_lit++)] = len; \
+    ws->l_buf[ws->last_lit++] = len; \
     dist--; \
-    (d->dyn_ltree[_length_code[len]+LITERALS+1].Freq)++; \
-    (d->dyn_dtree[d_code(dist)].Freq)++; \
-    flush = (ws->last_lit == (rs->lit_bufsize)-1); \
+    d->dyn_ltree[_length_code[len]+LITERALS+1].Freq++; \
+    d->dyn_dtree[d_code(dist)].Freq++; \
+    flush = (ws->last_lit == rs->lit_bufsize-1); \
   }
 #else
 # define _tr_tally_lit(s, c, flush) flush = _tr_tally(s, 0, c)
