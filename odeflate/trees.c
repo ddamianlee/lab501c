@@ -122,17 +122,17 @@ struct static_tree_desc {
     int     elems;               /* max number of elements in the tree */
     int     max_length;          /* max bit length for the codes */
 };
-static TOID(struct static_tree_desc) static_l_desc ;
-static TOID(struct static_tree_desc) static_d_desc;
-static TOID(struct static_tree_desc) static_bl_desc;
-// local struct static_tree_desc  static_l_desc =
-// {static_ltree, extra_lbits, LITERALS+1, L_CODES, MAX_BITS};
+// static TOID(struct static_tree_desc) static_l_desc ;
+// static TOID(struct static_tree_desc) static_d_desc;
+// static TOID(struct static_tree_desc) static_bl_desc;
+local struct static_tree_desc  static_l_desc =
+{static_ltree, extra_lbits, LITERALS+1, L_CODES, MAX_BITS};
 
-// local struct static_tree_desc  static_d_desc =
-// {static_dtree, extra_dbits, 0,          D_CODES, MAX_BITS};
+local struct static_tree_desc  static_d_desc =
+{static_dtree, extra_dbits, 0,          D_CODES, MAX_BITS};
 
-// local struct static_tree_desc  static_bl_desc =
-// {(const struct ct_data *)0, extra_blbits, 0,   BL_CODES, MAX_BL_BITS};
+local struct static_tree_desc  static_bl_desc =
+{(const struct ct_data *)0, extra_blbits, 0,   BL_CODES, MAX_BL_BITS};
 
 
 
@@ -140,7 +140,7 @@ static TOID(struct static_tree_desc) static_bl_desc;
  * Local (static) routines in this file.
  */
 
-local void tr_static_init OF((PMEMobjpool *pop, TOID(struct deflate_state) s));
+local void tr_static_init OF((/*PMEMobjpool *pop, TOID(struct deflate_state) s*/));
 local void init_block     OF((TOID(struct deflate_state) s));
 local void pqdownheap     OF((TOID(struct deflate_state) s, struct ct_data *tree, int k));
 local void gen_bitlen     OF((TOID(struct deflate_state) s, struct tree_desc *desc));
@@ -236,9 +236,9 @@ local void send_bits(s, value, length)
 /* ===========================================================================
  * Initialize the various 'constant' tables.
  */
-local void tr_static_init(pop, s)
-    PMEMobjpool *pop;
-    TOID(struct deflate_state) s;
+local void tr_static_init()
+    //PMEMobjpool *pop;
+    //TOID(struct deflate_state) s;
 {
 #if defined(GEN_TREES_H) || !defined(STDC)
     static int static_init_done = 0;
@@ -320,41 +320,41 @@ local void tr_static_init(pop, s)
 #endif /* defined(GEN_TREES_H) || !defined(STDC) */
     
     /* copy tree.h static tree to struct deflate_state */
-    struct deflate_state *ws = D_RW(s);
-    pmemobj_memcpy_persist(pop, ws->static_ltree, static_ltree, L_CODES+2);
-    pmemobj_memcpy_persist(pop, ws->static_dtree, static_dtree, D_CODES);
-    pmemobj_memcpy_persist(pop, ws->_dist_code, _dist_code, DIST_CODE_LEN);
-    pmemobj_memcpy_persist(pop, ws->_length_code, _length_code, MAX_MATCH-MIN_MATCH+1);
-    pmemobj_memcpy_persist(pop, ws->base_length, base_length, LENGTH_CODES);
-    pmemobj_memcpy_persist(pop, ws->base_dist, base_dist, D_CODES);
+    // struct deflate_state *ws = D_RW(s);
+    // pmemobj_memcpy_persist(pop, ws->static_ltree, static_ltree, L_CODES+2);
+    // pmemobj_memcpy_persist(pop, ws->static_dtree, static_dtree, D_CODES);
+    // pmemobj_memcpy_persist(pop, ws->_dist_code, _dist_code, DIST_CODE_LEN);
+    // pmemobj_memcpy_persist(pop, ws->_length_code, _length_code, MAX_MATCH-MIN_MATCH+1);
+    // pmemobj_memcpy_persist(pop, ws->base_length, base_length, LENGTH_CODES);
+    // pmemobj_memcpy_persist(pop, ws->base_dist, base_dist, D_CODES);
 
-    /* static literal tree description */
-    POBJ_ALLOC(pop, &static_l_desc, struct static_tree_desc, sizeof(struct static_tree_desc), NULL, NULL);
-    D_RW(static_l_desc)->max_length = MAX_BITS;
-    D_RW(static_l_desc)->elems = L_CODES;
-    D_RW(static_l_desc)->extra_base = LITERALS + 1;
-    D_RW(static_l_desc)->extra_bits = extra_lbits;
-    D_RW(static_l_desc)->static_tree = ws->static_ltree;
+    // /* static literal tree description */
+    // POBJ_ALLOC(pop, &static_l_desc, struct static_tree_desc, sizeof(struct static_tree_desc), NULL, NULL);
+    // D_RW(static_l_desc)->max_length = MAX_BITS;
+    // D_RW(static_l_desc)->elems = L_CODES;
+    // D_RW(static_l_desc)->extra_base = LITERALS + 1;
+    // D_RW(static_l_desc)->extra_bits = extra_lbits;
+    // D_RW(static_l_desc)->static_tree = ws->static_ltree;
 
-    /* static distance tree description */
-    POBJ_ALLOC(pop, &static_d_desc, struct static_tree_desc, sizeof(struct static_tree_desc), NULL, NULL);
-    D_RW(static_d_desc)->max_length = MAX_BITS;
-    D_RW(static_d_desc)->elems = D_CODES;
-    D_RW(static_d_desc)->extra_base = 0;
-    D_RW(static_d_desc)->extra_bits = extra_dbits;
-    D_RW(static_d_desc)->static_tree = ws->static_dtree;
+    // /* static distance tree description */
+    // POBJ_ALLOC(pop, &static_d_desc, struct static_tree_desc, sizeof(struct static_tree_desc), NULL, NULL);
+    // D_RW(static_d_desc)->max_length = MAX_BITS;
+    // D_RW(static_d_desc)->elems = D_CODES;
+    // D_RW(static_d_desc)->extra_base = 0;
+    // D_RW(static_d_desc)->extra_bits = extra_dbits;
+    // D_RW(static_d_desc)->static_tree = ws->static_dtree;
 
-    /* static bit length tree description */
-    POBJ_ALLOC(pop, &static_bl_desc, struct static_tree_desc, sizeof(struct static_tree_desc), NULL, NULL);
-    D_RW(static_bl_desc)->max_length = MAX_BL_BITS;
-    D_RW(static_bl_desc)->elems = BL_CODES;
-    D_RW(static_bl_desc)->extra_base = 0;
-    D_RW(static_bl_desc)->extra_bits = extra_blbits;
-    D_RW(static_bl_desc)->static_tree = (struct ct_data*)0;
+    // /* static bit length tree description */
+    // POBJ_ALLOC(pop, &static_bl_desc, struct static_tree_desc, sizeof(struct static_tree_desc), NULL, NULL);
+    // D_RW(static_bl_desc)->max_length = MAX_BL_BITS;
+    // D_RW(static_bl_desc)->elems = BL_CODES;
+    // D_RW(static_bl_desc)->extra_base = 0;
+    // D_RW(static_bl_desc)->extra_bits = extra_blbits;
+    // D_RW(static_bl_desc)->static_tree = (struct ct_data*)0;
 
-    pmemobj_persist(pop, D_RW(static_l_desc), sizeof(*D_RW(static_l_desc)));
-    pmemobj_persist(pop, D_RW(static_d_desc), sizeof(*D_RW(static_d_desc)));
-    pmemobj_persist(pop, D_RW(static_bl_desc), sizeof(*D_RW(static_bl_desc)));
+    // pmemobj_persist(pop, D_RW(static_l_desc), sizeof(*D_RW(static_l_desc)));
+    // pmemobj_persist(pop, D_RW(static_d_desc), sizeof(*D_RW(static_d_desc)));
+    // pmemobj_persist(pop, D_RW(static_bl_desc), sizeof(*D_RW(static_bl_desc)));
     }
 
 /* ===========================================================================
@@ -427,28 +427,28 @@ void ZLIB_INTERNAL _tr_init(pop, s)
     TOID(struct deflate_state) s;
 {
     struct deflate_state *ws = D_RW(s);
-    tr_static_init(pop, s);
+    tr_static_init();
 
     /* dynamic literal tree */
     //POBJ_ALLOC(pop, &ws->dyn_ltree, struct ct_data, sizeof(ws->dyn_ltree), NULL, NULL);
     //POBJ_ALLOC(pop, &ws->l_desc, struct tree_desc, sizeof(struct tree_desc), NULL, NULL);
 
     ws->l_desc.dyn_tree = ws->dyn_ltree;
-    ws->l_desc.stat_desc = D_RW(static_l_desc);
+    ws->l_desc.stat_desc = &static_l_desc;
 
     /* dynamic distance tree */
     //POBJ_ALLOC(pop, &ws->dyn_dtree, struct ct_data, sizeof(ws->dyn_dtree), NULL, NULL);
     //POBJ_ALLOC(pop, &ws->d_desc, struct tree_desc, sizeof(struct tree_desc), NULL, NULL);
 
     ws->d_desc.dyn_tree = ws->dyn_dtree;
-    ws->d_desc.stat_desc = D_RW(static_d_desc);
+    ws->d_desc.stat_desc = &static_d_desc;
 
     /* bit length tree */
    // POBJ_ALLOC(pop, &ws->bl_tree, struct ct_data, sizeof(ws->bl_tree), NULL, NULL);
     //POBJ_ALLOC(pop, &ws->bl_desc, struct tree_desc, sizeof(struct tree_desc), NULL, NULL);
 
     ws->bl_desc.dyn_tree = ws->bl_tree;
-    ws->bl_desc.stat_desc = D_RW(static_bl_desc);
+    ws->bl_desc.stat_desc = &static_bl_desc;
 
 
     ws->bi_buf = 0;
@@ -555,6 +555,7 @@ local void gen_bitlen(s, desc)
 {
     struct deflate_state *ws = D_RW(s);
     const struct deflate_state *rs = D_RO(s);
+
     struct ct_data *tree = desc->dyn_tree;
     int max_code         = desc->max_code;
     const struct ct_data *stree = desc->stat_desc->static_tree;
@@ -761,10 +762,10 @@ local void build_tree(pop, s, desc)
     /* At this point, the fields freq and dad are set. We can now
      * generate the bit lengths.
      */
-    gen_bitlen(s, desc);
+    gen_bitlen(s, (struct tree_desc *)desc);
 
     /* The field len is now set, we can generate the bit codes */
-    gen_codes (tree, max_code, ws->bl_count);
+    gen_codes ((struct ct_data *)tree, max_code, ws->bl_count);
     pmemobj_persist(pop, desc, sizeof(*desc));
 }
 
@@ -880,11 +881,11 @@ local int build_bl_tree(pop, s)
     int max_blindex;  /* index of last bit length code of non zero freq */
 
     /* Determine the bit length frequencies for literal and distance trees */
-    scan_tree(s, ws->dyn_ltree, rs->l_desc.max_code);
-    scan_tree(s, ws->dyn_dtree, rs->d_desc.max_code);
+    scan_tree(s, (struct ct_data *)ws->dyn_ltree, rs->l_desc.max_code);
+    scan_tree(s, (struct ct_data *)ws->dyn_dtree, rs->d_desc.max_code);
 
     /* Build the bit length tree: */
-    build_tree(pop, s, &(ws->bl_desc));
+    build_tree(pop, s, (struct tree_desc *)&(ws->bl_desc));
 
     /* opt_len now includes the length of the tree representations, except
      * the lengths of the bit lengths codes and the 5+5+4 bits for the counts.
@@ -931,10 +932,10 @@ local void send_all_trees(s, lcodes, dcodes, blcodes)
     }
     //Tracev((stderr, "\nbl tree: sent %ld", s->bits_sent));
 
-    send_tree(s, ws->dyn_ltree, lcodes-1); /* literal tree */
+    send_tree(s, (struct ct_data *)ws->dyn_ltree, lcodes-1); /* literal tree */
     //Tracev((stderr, "\nlit tree: sent %ld", s->bits_sent));
 
-    send_tree(s, ws->dyn_dtree, dcodes-1); /* distance tree */
+    send_tree(s, (struct ct_data *)ws->dyn_dtree, dcodes-1); /* distance tree */
     //Tracev((stderr, "\ndist tree: sent %ld", s->bits_sent));
 }
 
@@ -954,7 +955,7 @@ void ZLIB_INTERNAL _tr_stored_block(pop, s, buf, stored_len, last)
     bi_windup(s);        /* align on byte boundary */
     put_short(s, (ush)stored_len);
     put_short(s, (ush)~stored_len);
-    pmemobj_memcpy_persist(pop, D_RW(ws->pending_buf) + rs->pending, (Bytef *)buf, stored_len);
+    pmemobj_memcpy_persist(pop, ws->pending_buf + rs->pending, (Bytef *)buf, stored_len);
     ws->pending += stored_len;
 #ifdef ZLIB_DEBUG
     s->compressed_len = (s->compressed_len + 3 + 7) & (ulg)~7L;
@@ -983,8 +984,8 @@ void ZLIB_INTERNAL _tr_align(s)
     struct deflate_state *ws = D_RW(s);
     const struct deflate_state *rs = D_RO(s);
     send_bits(s, STATIC_TREES<<1, 3);
-    //send_code(s, END_BLOCK, static_ltree);
-    send_bits(s, static_ltree[END_BLOCK].Code, static_ltree[END_BLOCK].Len)
+    send_code(s, END_BLOCK, static_ltree);
+    //send_bits(s, static_ltree[END_BLOCK].Code, static_ltree[END_BLOCK].Len)
 #ifdef ZLIB_DEBUG
     s->compressed_len += 10L; /* 3 for block type, 7 for EOB */
 #endif
@@ -1015,11 +1016,11 @@ void ZLIB_INTERNAL _tr_flush_block(pop, s, buf, stored_len, last)
             D_RW(ws->strm)->data_type = detect_data_type(s);
 
         /* Construct the literal and distance trees */
-        build_tree(pop, s, &(ws->l_desc));     
+        build_tree(pop, s, (struct tree_desc *)&(ws->l_desc));     
         // Tracev((stderr, "\nlit data: dyn %ld, stat %ld", s->opt_len,
         //         s->static_len));
 
-        build_tree(pop, s, &(ws->d_desc));
+        build_tree(pop, s, (struct tree_desc *)&(ws->d_desc));
         // Tracev((stderr, "\ndist data: dyn %ld, stat %ld", s->opt_len,
         //         s->static_len));
         /* At this point, opt_len and static_len are the total bit lengths of
@@ -1066,7 +1067,7 @@ void ZLIB_INTERNAL _tr_flush_block(pop, s, buf, stored_len, last)
     } else if (rs->strategy == Z_FIXED || static_lenb == opt_lenb) {
 #endif
         send_bits(s, (STATIC_TREES<<1)+last, 3);
-        compress_block(s, D_RW(static_l_desc)->static_tree, D_RW(static_d_desc)->static_tree);
+        compress_block(s, (const struct ct_data *)static_ltree, (const struct ct_data *)static_dtree);
 #ifdef ZLIB_DEBUG
         s->compressed_len += 3 + s->static_len;
 #endif
@@ -1112,7 +1113,7 @@ int ZLIB_INTERNAL _tr_tally (s, dist, lc)
         /* lc is the unmatched char */
         ws->dyn_ltree[lc].Freq++;
     } else {
-        (ws->matches)++;
+        ws->matches++;
         /* Here, lc is the match length - MIN_MATCH */
         dist--;             /* dist = match distance - 1 */
         Assert((ush)dist < (ush)MAX_DIST(s) &&

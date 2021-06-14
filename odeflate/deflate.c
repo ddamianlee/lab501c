@@ -283,16 +283,16 @@ int ZEXPORT deflateInit2_(pop, strm, level, method, windowBits, memLevel, strate
     
     POBJ_ALLOC(pop, &overlay, ush, rs->lit_bufsize * (sizeof(ush)+2), NULL, NULL);
     pmemobj_persist(pop, D_RW(overlay), sizeof(*D_RW(overlay)));
-    POBJ_ALLOC(pop, &ws->pending_buf, Byte, rs->lit_bufsize * (sizeof(ush)+2), NULL, NULL);
-    pmemobj_persist(pop, D_RW(ws->pending_buf), sizeof(*(D_RW(ws->pending_buf))));
+    //POBJ_ALLOC(pop, &ws->pending_buf, Byte, rs->lit_bufsize * (sizeof(ush)+2), NULL, NULL);
+    //pmemobj_persist(pop, D_RW(ws->pending_buf), sizeof(*(D_RW(ws->pending_buf))));
     //overlay = (ushf *) ZALLOC(rstrm, rs->lit_bufsize, sizeof(ush)+2);
     
-    //ws->pending_buf = /*(uchf *)D_RW(overlay)*/ overlay;
+    ws->pending_buf = (uch *)D_RW(overlay);
     ws->pending_buf_size = (ulg)rs->lit_bufsize * (sizeof(ush)+2L);
 
 
     if (D_RO(rs->window) == Z_NULL || D_RO(rs->prev) == Z_NULL || D_RO(rs->head) == Z_NULL ||
-          D_RO(rs->pending_buf) == Z_NULL) 
+          rs->pending_buf == Z_NULL) 
     {
         ws->status = FINISH_STATE;
         wstrm->msg = ERR_MSG(Z_MEM_ERROR);
@@ -300,7 +300,7 @@ int ZEXPORT deflateInit2_(pop, strm, level, method, windowBits, memLevel, strate
         return Z_MEM_ERROR;
     }
     ws->d_buf = D_RW(overlay) + rs->lit_bufsize/sizeof(ush);
-    ws->l_buf = D_RW(ws->pending_buf) + (1+sizeof(ush))*(rs->lit_bufsize);
+    ws->l_buf = ws->pending_buf + (1+sizeof(ush))*(rs->lit_bufsize);
 
     ws->level = level;
     ws->strategy = strategy;
@@ -338,7 +338,7 @@ int ZEXPORT deflateResetKeep (pop, strm)
     wstrm->msg = Z_NULL; /* use zfree if we ever allocate msg dynamically */
     wstrm->data_type = Z_UNKNOWN;
 
-    s = rstrm->state;
+    s = wstrm->state;
     struct deflate_state *ws = D_RW(s);
     const struct deflate_state *rs = D_RO(s);
     ws->pending = 0;
@@ -374,7 +374,7 @@ int ZEXPORT deflateEnd (strm)
     //POBJ_FREE(&ws->bl_desc);
 
     /* Deallocate in reverse order of allocations: */
-    POBJ_FREE(&rs->pending_buf);
+    //POBJ_FREE(&rs->pending_buf);
     POBJ_FREE(&rs->head);
     POBJ_FREE(&rs->prev);
     POBJ_FREE(&rs->window);
@@ -645,9 +645,9 @@ local void flush_pending(pop, strm)
     if (len > rstrm->avail_out) len = rstrm->avail_out;
     if (len == 0) return;
 
-    pmemobj_memcpy_persist(pop, wstrm->next_out, D_RO(rs->pending_out), len);
+    pmemobj_memcpy_persist(pop, wstrm->next_out, rs->pending_out, len);
     wstrm->next_out  += len;
-    *D_RW(ws->pending_out)  += len;
+    ws->pending_out  += len;
     wstrm->total_out += len;
     wstrm->avail_out -= len;
     ws->pending      -= len;
@@ -1256,10 +1256,10 @@ local block_state deflate_stored(pop, s, flush)
         _tr_stored_block(pop, s, (char *)0, 0L, last);
 
         /* Replace the lengths in the dummy stored block with len. */
-        D_RW(ws->pending_buf)[rs->pending - 4] = len;
-        D_RW(ws->pending_buf)[rs->pending - 3] = len >> 8;
-        D_RW(ws->pending_buf)[rs->pending - 2] = ~len;
-        D_RW(ws->pending_buf)[rs->pending - 1] = ~len >> 8;
+        ws->pending_buf[rs->pending - 4] = len;
+        ws->pending_buf[rs->pending - 3] = len >> 8;
+        ws->pending_buf[rs->pending - 2] = ~len;
+        ws->pending_buf[rs->pending - 1] = ~len >> 8;
 
         /* Write the stored block header bytes. */
         flush_pending(pop, rs->strm);

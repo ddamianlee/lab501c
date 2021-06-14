@@ -423,7 +423,7 @@ int main(int argc, char **argv)
             return 1;
         }
         char *outfile = argv[2];    /* output file path */
-        ret = def(pop, argv[1], outfile, 4);
+        ret = def(pop, argv[1], outfile, Z_DEFAULT_COMPRESSION);
         if (ret != Z_OK)
             zerr(ret);
         return ret;
