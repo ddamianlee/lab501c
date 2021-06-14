@@ -143,9 +143,9 @@ local struct static_tree_desc  static_bl_desc =
 local void tr_static_init OF(());
 local void init_block     OF((TOID(struct deflate_state) s, struct datastruct *d));
 local void pqdownheap     OF((struct datastruct *d, struct ct_data *tree, int k));
-local void gen_bitlen     OF((TOID(struct deflate_state) s, struct datastruct *d, struct tree_desc *desc));
+local void gen_bitlen     OF((struct datastruct *d, struct tree_desc *desc));
 local void gen_codes      OF((struct ct_data *tree, int max_code, ushf *bl_count));
-local void build_tree     OF((TOID(struct deflate_state) s, struct datastruct *d, struct tree_desc *desc));
+local void build_tree     OF((struct datastruct *d, struct tree_desc *desc));
 local void scan_tree      OF((TOID(struct deflate_state) s, struct datastruct *d, struct ct_data *tree, int max_code));
 local void send_tree      OF((TOID(struct deflate_state) s, struct datastruct *d, struct ct_data *tree, int max_code));
 local int  build_bl_tree  OF((TOID(struct deflate_state) s, struct datastruct *d));
@@ -452,7 +452,7 @@ local void init_block(s, d)
 
 
     d->dyn_ltree[END_BLOCK].Freq = 1;
-    ws->opt_len = ws->static_len = 0L;
+    d->opt_len = d->static_len = 0L;
     ws->last_lit = ws->matches = 0;
 }
 
@@ -522,13 +522,13 @@ local void pqdownheap(d, tree, k)
  *     The length opt_len is updated; static_len is also updated if stree is
  *     not null.
  */
-local void gen_bitlen(s, d, desc)
-    TOID(struct deflate_state) s;
+local void gen_bitlen(d, desc)
+    //TOID(struct deflate_state) s;
     struct datastruct *d;
     struct tree_desc *desc;    /* the tree descriptor */
 {
-    struct deflate_state *ws = D_RW(s);
-    const struct deflate_state *rs = D_RO(s);
+    //struct deflate_state *ws = D_RW(s);
+    //const struct deflate_state *rs = D_RO(s);
     struct ct_data *tree = desc->dyn_tree;
     int max_code         = desc->max_code;
     const struct ct_data *stree = desc->stat_desc->static_tree;
@@ -562,8 +562,8 @@ local void gen_bitlen(s, d, desc)
         xbits = 0;
         if (n >= base) xbits = extra[base];
         f = tree[n].Freq;
-        ws->opt_len += (ulg)f * (unsigned)(bits + xbits);
-        if (stree) ws->static_len += (ulg)f * (unsigned)(stree[n].Len + xbits);
+        d->opt_len += (ulg)f * (unsigned)(bits + xbits);
+        if (stree) d->static_len += (ulg)f * (unsigned)(stree[n].Len + xbits);
     }
     if (overflow == 0) return;
 
@@ -595,7 +595,7 @@ local void gen_bitlen(s, d, desc)
             if (m > max_code) continue;
             if ((unsigned) tree[m].Len != (unsigned) bits) {
                 //Tracev((stderr,"code %d bits %d->%d\n", m, tree[m].Len, bits));
-                ws->opt_len += ((ulg)bits - tree[m].Len) * tree[m].Freq;
+                d->opt_len += ((ulg)bits - tree[m].Len) * tree[m].Freq;
                 tree[m].Len = (ush)bits;
             }
             n--;
@@ -654,13 +654,13 @@ local void gen_codes (tree, max_code, bl_count)
  *     and corresponding code. The length opt_len is updated; static_len is
  *     also updated if stree is not null. The field max_code is set.
  */
-local void build_tree(s, d, desc)
-    TOID(struct deflate_state) s;
+local void build_tree(d, desc)
+    //TOID(struct deflate_state) s;
     struct datastruct *d;
     struct tree_desc *desc;  /* the tree descriptor */
 {
-    struct deflate_state *ws = D_RW(s);
-    const struct deflate_state *rs = D_RO(s);
+    //struct deflate_state *ws = D_RW(s);
+    //const struct deflate_state *rs = D_RO(s);
     struct ct_data *tree = desc->dyn_tree;
     const struct ct_data *stree = desc->stat_desc->static_tree;
     int elems             = desc->stat_desc->elems;
@@ -692,7 +692,7 @@ local void build_tree(s, d, desc)
         node = d->heap[++(d->heap_len)] = (max_code < 2 ? ++max_code : 0);
         tree[node].Freq = 1;
         d->depth[node] = 0;
-        ws->opt_len--; if (stree) ws->static_len -= stree[node].Len;
+        d->opt_len--; if (stree) d->static_len -= stree[node].Len;
         /* node is 0 or 1 so it does not have extra bits */
     }
     desc->max_code = max_code;
@@ -735,7 +735,7 @@ local void build_tree(s, d, desc)
     /* At this point, the fields freq and dad are set. We can now
      * generate the bit lengths.
      */
-    gen_bitlen(s, d, desc);
+    gen_bitlen(d, desc);
 
     /* The field len is now set, we can generate the bit codes */
     gen_codes (tree, max_code, d->bl_count);
@@ -860,7 +860,7 @@ local int build_bl_tree(s, d)
     scan_tree(s, d, d->dyn_dtree, d->d_desc.max_code);
 
     /* Build the bit length tree: */
-    build_tree(s, d, (struct tree_desc *)(&(d->bl_desc)));
+    build_tree(d, (struct tree_desc *)(&(d->bl_desc)));
 
     /* opt_len now includes the length of the tree representations, except
      * the lengths of the bit lengths codes and the 5+5+4 bits for the counts.
@@ -874,7 +874,7 @@ local int build_bl_tree(s, d)
         if (d->bl_tree[bl_order[max_blindex]].Len != 0) break;
     }
     /* Update opt_len to include the bit length tree and counts */
-    ws->opt_len += 3*((ulg)max_blindex+1) + 5+5+4;
+    d->opt_len += 3*((ulg)max_blindex+1) + 5+5+4;
     // Tracev((stderr, "\ndyn trees: dyn %ld, stat %ld",
     //         s->opt_len, s->static_len));
 
@@ -994,11 +994,11 @@ void ZLIB_INTERNAL _tr_flush_block(pop, s, d, buf, stored_len, last)
             D_RW(ws->strm)->data_type = detect_data_type(s, d);
 
         /* Construct the literal and distance trees */
-        build_tree(s, d, (struct tree_desc *)(&(d->l_desc)));     
+        build_tree(d, (struct tree_desc *)(&(d->l_desc)));     
         // Tracev((stderr, "\nlit data: dyn %ld, stat %ld", s->opt_len,
         //         s->static_len));
 
-        build_tree(s, d, (struct tree_desc *)(&(d->d_desc)));
+        build_tree(d, (struct tree_desc *)(&(d->d_desc)));
         // Tracev((stderr, "\ndist data: dyn %ld, stat %ld", s->opt_len,
         //         s->static_len));
         /* At this point, opt_len and static_len are the total bit lengths of
@@ -1011,8 +1011,8 @@ void ZLIB_INTERNAL _tr_flush_block(pop, s, d, buf, stored_len, last)
         max_blindex = build_bl_tree(s, d);
 
         /* Determine the best encoding. Compute the block lengths in bytes. */
-        opt_lenb = (rs->opt_len+3+7)>>3;
-        static_lenb = (rs->static_len+3+7)>>3;
+        opt_lenb = (d->opt_len+3+7)>>3;
+        static_lenb = (d->static_len+3+7)>>3;
 
         // Tracev((stderr, "\nopt %lu(%lu) stat %lu(%lu) stored %lu lit %u ",
         //         opt_lenb, s->opt_len, static_lenb, s->static_len, stored_len,

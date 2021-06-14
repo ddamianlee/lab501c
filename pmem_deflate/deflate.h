@@ -250,8 +250,8 @@ struct deflate_state {
      * array would be necessary.
      */
 
-    ulg opt_len;        /* bit length of current block with optimal trees */
-    ulg static_len;     /* bit length of current block with static trees */
+    // ulg opt_len;        /* bit length of current block with optimal trees */
+    // ulg static_len;     /* bit length of current block with static trees */
     uInt matches;       /* number of string matches in current block */
     uInt insert;        /* bytes at end of window left to insert */
 
@@ -322,6 +322,8 @@ struct datastruct
     uch depth[2*L_CODES+1];
     /* Depth of each subtree used as tie breaker for trees of equal frequency
      */
+    ulg opt_len;        /* bit length of current block with optimal trees */
+    ulg static_len;     /* bit length of current block with static trees */
 };
 //typedef struct hash_table hash;
 
