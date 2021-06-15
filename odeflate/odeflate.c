@@ -24,7 +24,7 @@
 #  define SET_BINARY_MODE(file)
 #endif
 
-#define CHUNK 2097152
+#define CHUNK 16384
 
 
 
@@ -130,9 +130,9 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
     {
         strm = TX_NEW(struct z_stream);
         /* allocate deflate state */
-        D_RW(strm)->zalloc = Z_NULL;
-        D_RW(strm)->zfree = Z_NULL;
-        D_RW(strm)->opaque = Z_NULL;
+        // D_RW(strm)->zalloc = Z_NULL;
+        // D_RW(strm)->zfree = Z_NULL;
+        // D_RW(strm)->opaque = Z_NULL;
     } TX_END
     
     ret = deflateInit(pop, strm, level);
@@ -276,9 +276,9 @@ int inf(PMEMobjpool *pop, char *src, char *pmemfile)
     {
         strm = TX_NEW(struct z_stream);
         /* allocate deflate state */
-        D_RW(strm)->zalloc = Z_NULL;
-        D_RW(strm)->zfree = Z_NULL;
-        D_RW(strm)->opaque = Z_NULL;
+        // D_RW(strm)->zalloc = Z_NULL;
+        // D_RW(strm)->zfree = Z_NULL;
+        // D_RW(strm)->opaque = Z_NULL;
         D_RW(strm)->avail_in = 0;
         D_RW(strm)->next_in = Z_NULL;    
     } TX_END
@@ -408,12 +408,12 @@ void zerr(int ret)
 /* compress or decompress */
 int main(int argc, char **argv)
 {
-    time_t start, end;
-    start = clock();
+    // time_t start, end;
+    // start = clock();
     int ret;
-
+    int level;
     /* do compression if arguments = 4 */
-    if (argc == 4)
+    if (argc == 5)
     {
         /* create or open a memory pool */
         PMEMobjpool *pop;
@@ -423,7 +423,9 @@ int main(int argc, char **argv)
             return 1;
         }
         char *outfile = argv[2];    /* output file path */
-        ret = def(pop, argv[1], outfile, Z_DEFAULT_COMPRESSION);
+        level = atoi(argv[4]);
+        printf("level = %d\n", level);
+        ret = def(pop, argv[1], outfile, level);
         if (ret != Z_OK)
             zerr(ret);
         return ret;

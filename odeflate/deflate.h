@@ -101,6 +101,7 @@ typedef unsigned IPos;
 struct deflate_state {
     TOID(struct z_stream) strm;      /* pointer back to this zlib stream */
     int   status;                    /* as the name implies */
+    TOID(ush) overlay;
     Byte  *pending_buf;          /* output still pending */
     ulg   pending_buf_size;          /* size of pending_buf */
     Byte  *pending_out;          /* next pending byte to output to the stream */

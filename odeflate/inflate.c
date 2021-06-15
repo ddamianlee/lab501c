@@ -109,8 +109,8 @@ TOID(struct z_stream) strm;
 {
     //struct inflate_state FAR *state;
     TOID(struct inflate_state) state;
-    if (TOID_IS_NULL(strm) ||
-        D_RO(strm)->zalloc == (alloc_func)0 || D_RO(strm)->zfree == (free_func)0)
+    if (TOID_IS_NULL(strm)/* ||
+        D_RO(strm)->zalloc == (alloc_func)0 || D_RO(strm)->zfree == (free_func)0*/)
         return 1;
     state = D_RO(strm)->istate;
     if (TOID_IS_NULL(state) || !TOID_EQUALS(D_RO(state)->strm, strm) ||
@@ -194,7 +194,7 @@ int windowBits;
     if (windowBits && (windowBits < 8 || windowBits > 15))
         return Z_STREAM_ERROR;
     if (D_RO(state)->window != Z_NULL && D_RO(state)->wbits != (unsigned)windowBits) {
-        ZFREE(D_RW(strm), D_RW(state)->window);
+        POBJ_FREE(&D_RW(strm)->windowp);
 
         D_RW(state)->window = Z_NULL;
     }
@@ -227,20 +227,20 @@ int stream_size;
         return Z_STREAM_ERROR;
     } 
     D_RW(strm)->msg = Z_NULL;                 /* in case we return an error */
-    if (D_RW(strm)->zalloc == (alloc_func)0) {
-#ifdef Z_SOLO
-        return Z_STREAM_ERROR;
-#else
-        D_RW(strm)->zalloc = zcalloc;
-        D_RW(strm)->opaque = (voidpf)0;
-#endif
-    }
-    if (D_RW(strm)->zfree == (free_func)0)
-#ifdef Z_SOLO
-        return Z_STREAM_ERROR;
-#else
-        D_RW(strm)->zfree = zcfree;
-#endif
+//     if (D_RW(strm)->zalloc == (alloc_func)0) {
+// #ifdef Z_SOLO
+//         return Z_STREAM_ERROR;
+// #else
+//         D_RW(strm)->zalloc = zcalloc;
+//         D_RW(strm)->opaque = (voidpf)0;
+// #endif
+//     }
+//     if (D_RW(strm)->zfree == (free_func)0)
+// #ifdef Z_SOLO
+//         return Z_STREAM_ERROR;
+// #else
+//         D_RW(strm)->zfree = zcfree;
+//#endif
     // state = (struct inflate_state FAR *)
     //         ZALLOC(strm, 1, sizeof(struct inflate_state));
     // if (state == Z_NULL) return Z_MEM_ERROR;
