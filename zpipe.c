@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include <stdlib.h>
 #include "zlib.h"
 
 #if defined(MSDOS) || defined(OS2) || defined(WIN32) || defined(__CYGWIN__)
@@ -176,14 +177,16 @@ void zerr(int ret)
 int main(int argc, char **argv)
 {
     int ret;
-
+    int level;
     /* avoid end-of-line conversions */
     SET_BINARY_MODE(stdin);
     SET_BINARY_MODE(stdout);
 
     /* do compression if no arguments */
-    if (argc == 1) {
-        ret = def(stdin, stdout, Z_DEFAULT_COMPRESSION);
+    if (argc == 2) {
+        level = atoi(argv[1]);
+        printf("level = %d\n", level);
+        ret = def(stdin, stdout, level);
         if (ret != Z_OK)
             zerr(ret);
         return ret;
