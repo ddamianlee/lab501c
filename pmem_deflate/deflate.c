@@ -130,8 +130,8 @@ local int deflateStateCheck (strm)
     const struct z_stream *rstrm = D_RO(strm);
     TOID(struct deflate_state) s;
     
-    if (TOID_IS_NULL(strm) ||
-        rstrm->zalloc == (alloc_func)0 || rstrm->zfree == (free_func)0)
+    if (TOID_IS_NULL(strm) /*||
+        rstrm->zalloc == (alloc_func)0 || rstrm->zfree == (free_func)0*/)
         return 1;
     s = rstrm->state;
     const struct deflate_state *rs = D_RO(s);
@@ -181,7 +181,7 @@ int ZEXPORT deflateInit2_(pop, strm, level, method, windowBits, memLevel, strate
     /* We overlay pending_buf and d_buf+l_buf. This works since the average
      * output size for (length,distance) codes is <= 24 bits.
      */
-    TOID(ush) overlay;
+    //TOID(ush) overlay;
 
     if (version == Z_NULL || version[0] != my_version[0] ||
         stream_size != sizeof(struct z_stream)) {
@@ -197,13 +197,13 @@ int ZEXPORT deflateInit2_(pop, strm, level, method, windowBits, memLevel, strate
     struct z_stream *wstrm = D_RW(strm);
     const struct z_stream *rstrm = D_RO(strm);
     wstrm->msg = Z_NULL;
-    if (wstrm->zalloc == (alloc_func)0) 
-    {
-        wstrm->zalloc = zcalloc;
-        wstrm->opaque = (voidpf)0;
-    }
-    if (wstrm->zfree == (free_func)0)
-        wstrm->zfree = zcfree;
+    // if (wstrm->zalloc == (alloc_func)0) 
+    // {
+    //     wstrm->zalloc = zcalloc;
+    //     wstrm->opaque = (voidpf)0;
+    // }
+    // if (wstrm->zfree == (free_func)0)
+    //     wstrm->zfree = zcfree;
 
     if (level == Z_DEFAULT_COMPRESSION) level = 6;
 
@@ -285,13 +285,13 @@ int ZEXPORT deflateInit2_(pop, strm, level, method, windowBits, memLevel, strate
         //pmemobj_persist(pop, D_RW(ws->head), sizeof(*D_RW(ws->head)));     
     }
     
-    POBJ_ALLOC(pop, &overlay, ush, rs->lit_bufsize * (sizeof(ush)+2), NULL, NULL);
-    pmemobj_persist(pop, D_RW(overlay), sizeof(*D_RW(overlay)));
+    POBJ_ALLOC(pop, &ws->overlay, ush, rs->lit_bufsize * (sizeof(ush)+2), NULL, NULL);
+    pmemobj_persist(pop, D_RW(ws->overlay), sizeof(*D_RW(ws->overlay)));
     //POBJ_ALLOC(pop, &ws->pending_buf, Byte, rs->lit_bufsize * (sizeof(ush)+2), NULL, NULL);
     //pmemobj_persist(pop, D_RW(ws->pending_buf), sizeof(*(D_RW(ws->pending_buf))));
     //overlay = (ushf *) ZALLOC(rstrm, rs->lit_bufsize, sizeof(ush)+2);
     
-    ws->pending_buf = (uch *)D_RW(overlay);
+    ws->pending_buf = (uch *)D_RW(ws->overlay);
     ws->pending_buf_size = (ulg)rs->lit_bufsize * (sizeof(ush)+2L);
 
 
@@ -303,7 +303,7 @@ int ZEXPORT deflateInit2_(pop, strm, level, method, windowBits, memLevel, strate
         deflateEnd (strm);
         return Z_MEM_ERROR;
     }
-    ws->d_buf = D_RW(overlay) + rs->lit_bufsize/sizeof(ush);
+    ws->d_buf = D_RW(ws->overlay) + rs->lit_bufsize/sizeof(ush);
     ws->l_buf = ws->pending_buf + (1+sizeof(ush))*(rs->lit_bufsize);
 
     ws->level = level;
@@ -383,9 +383,10 @@ int ZEXPORT deflateEnd (strm)
     //POBJ_FREE(&rs->head);
     //POBJ_FREE(&rs->prev);
     //TRY_FREE(D_RW(strm), ws->head);
+    POBJ_FREE(&rs->overlay);
     free(d->head);
     free(d->prev);
-    ZFREE(D_RW(strm), D_RW(strm)->hashtable);
+    free(D_RW(strm)->hashtable);
     //TRY_FREE(D_RW(strm), ws->prev);
     POBJ_FREE(&rs->window);
     POBJ_FREE(&D_RW(strm)->state);
