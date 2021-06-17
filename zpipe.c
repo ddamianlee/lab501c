@@ -185,7 +185,7 @@ int main(int argc, char **argv)
     /* do compression if no arguments */
     if (argc == 2) {
         level = atoi(argv[1]);
-        printf("level = %d\n", level);
+        //printf("level = %d\n", level);
         ret = def(stdin, stdout, level);
         if (ret != Z_OK)
             zerr(ret);

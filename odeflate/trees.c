@@ -587,7 +587,7 @@ local void gen_bitlen(s, desc)
 
         ws->bl_count[bits]++;
         xbits = 0;
-        if (n >= base) xbits = extra[base];
+        if (n >= base) xbits = extra[n-base];
         f = tree[n].Freq;
         ws->opt_len += (ulg)f * (unsigned)(bits + xbits);
         if (stree) ws->static_len += (ulg)f * (unsigned)(stree[n].Len + xbits);

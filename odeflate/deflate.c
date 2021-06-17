@@ -388,7 +388,7 @@ local void lm_init (pop, s)
 
     /* CLEAR_HASH(s) */
     D_RW(ws->head)[rs->hash_size-1] = NIL; 
-    pmemobj_memset_persist(pop, (Bytef *)D_RW(ws->head), 0, (unsigned)(ws->hash_size-1)*sizeof(*D_RO(rs->head)));
+    pmemobj_memset_persist(pop, (Bytef *)D_RW(ws->head), 0, (unsigned)(rs->hash_size-1)*sizeof(*D_RO(rs->head)));
 
     /* Set the default configuration parameters:
      */
@@ -486,10 +486,12 @@ local void fill_window(pop, s)
     TOID(struct deflate_state) s;
 {
     const struct deflate_state *rs = D_RO(s);
-    TOID(struct z_stream) strm = rs->strm;
-    struct z_stream *wstrm = D_RW(strm);
-    const struct z_stream *rstrm = D_RO(strm);
     struct deflate_state *ws = D_RW(s);
+
+    TOID(struct z_stream) strm = rs->strm;
+    //struct z_stream *wstrm = D_RW(strm);
+    const struct z_stream *rstrm = D_RO(strm);
+    
     unsigned n;
     unsigned more;    /* Amount of free space at the end of the window. */
     uInt wsize = rs->w_size;
@@ -556,7 +558,7 @@ local void fill_window(pop, s)
 #endif
                 D_RW(ws->head)[rs->ins_h] = (Pos)str;
                 str++;
-                (ws->insert)--;
+                ws->insert--;
                 if (rs->lookahead + rs->insert < MIN_MATCH)
                     break;
             }
@@ -813,14 +815,17 @@ int ZEXPORT deflate (pop, strm, flush)
     struct z_stream *wstrm = D_RW(strm);
     const struct z_stream *rstrm = D_RO(strm);
     int old_flush; /* value of flush param for previous deflate call */
-    TOID(struct deflate_state) s;
+    
 
     if (deflateStateCheck(strm) || flush > Z_BLOCK || flush < 0) {
         return Z_STREAM_ERROR;
     }
+    TOID(struct deflate_state) s;
     s = wstrm->state;
     struct deflate_state *ws = D_RW(s);
     const struct deflate_state *rs = D_RO(s);
+
+
     if (rstrm->next_out == Z_NULL ||
         (rstrm->avail_in != 0 && rstrm->next_in == Z_NULL) ||
         (rs->status == FINISH_STATE && flush != Z_FINISH)) {
