@@ -112,7 +112,7 @@ int def(char *source, char *dest, int level)
         perror("pmem_map_file");
         exit(1);
     }
-
+    printf("is source file mapped in pmem? = %d\n", is_pmem);
 
     int fd;   
     if((fd = open(dest, O_CREAT | O_RDWR | O_EXCL , S_IRWXU | S_IWUSR | S_IRUSR)) < 0)
@@ -151,7 +151,7 @@ int def(char *source, char *dest, int level)
                     memcpy(in, srcpmemaddr, CHUNK);
                     maplen -= CHUNK;
                     input_len = CHUNK;
-                    source += CHUNK;
+                    srcpmemaddr += CHUNK;
                 }    
             }
             strm.avail_in = input_len;
