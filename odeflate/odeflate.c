@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,7 +25,7 @@
 #  define SET_BINARY_MODE(file)
 #endif
 
-#define CHUNK 16384
+#define CHUNK 262144
 
 
 
@@ -37,13 +38,13 @@ struct InOutbuffer
 
 
 static void
-do_copy_to_pmem(char *pmemaddr, FILE *fp, off_t len)
+do_copy_to_pmem(char *pmemaddr, int fd, off_t len)
 {
 	char buf[CHUNK];
 	int cc;
 
 	/* copy the file, saving the last flush step to the end */
-	while ((cc = fread(buf, 1, CHUNK, fp)) > 0) {
+	while ((cc = read(fd, buf, CHUNK)) > 0) {
 		//for(int i = 0; i < 100; i++)
             //printf("%c", buf[i]);
         pmem_memcpy_nodrain(pmemaddr, buf, cc);
@@ -64,14 +65,14 @@ do_copy_to_pmem(char *pmemaddr, FILE *fp, off_t len)
  * do_copy_to_non_pmem -- copy to a non-pmem memory mapped file
  */
 static void
-do_copy_to_non_pmem(char *addr, FILE *fp, off_t len)
+do_copy_to_non_pmem(char *addr, int fd, off_t len)
 {
 	char *startaddr = addr;
 	char buf[CHUNK];
 	int cc;
 
 	/* copy the file, saving the last flush step to the end */
-	while ((cc = fread(buf, 1, CHUNK, fp)) > 0) {
+	while ((cc = read(fd, buf, CHUNK)) > 0) {
 		//for(int i = 0; i < 100; i++)
             //printf("%c", buf[i]);
         memcpy(addr, buf, cc);
@@ -100,51 +101,51 @@ do_copy_to_non_pmem(char *addr, FILE *fp, off_t len)
 int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
 {
     int ret, flush;
-    //z_stream strm;
-    int fd;                     /* temporary file discriptor */
-    FILE *fp;                   /* temporary file pointer */
-    fp = tmpfile();
+
+    int fd;  
+    // if((fd = open("/tmp", O_TMPFILE | O_RDWR | O_EXCL , S_IWUSR | S_IRUSR)) < 0)
+    //     perror("open error"); 
+    if((fd = open(pmemfile, O_CREAT | O_RDWR | O_EXCL , S_IRWXU | S_IWUSR | S_IRUSR)) < 0)
+        perror("open error");                    
+    //FILE *fp;                   /* temporary file pointer */
+    //fp = tmpfile();
+    
     /* pmem file parameters */
     char *src_pmemaddr;         /* src file pointer */
-    char *pmemaddr;             /* output file pointer */
+    //char *out_pmemaddr;             /* output file pointer */
     int is_pmem;                /* pmem_map_file arguments */
-    size_t mapped_len;
+    size_t mapped_len_src;
+    //size_t mapped_len_out;
     int i;
     size_t maplen;
     
     /* map the src pmem file */
-    if((src_pmemaddr = pmem_map_file(src, 0, PMEM_FILE_EXCL, 0666, &mapped_len, &is_pmem)) == NULL)
+    if((src_pmemaddr = pmem_map_file(src, 0, PMEM_FILE_EXCL, 0666, &mapped_len_src, &is_pmem)) == NULL)
     {
         perror("pmem_map_file");
         exit(1);
     }
-    printf("is source file pmem-file? = %d\n", is_pmem);
-    maplen = mapped_len;
+    printf("is source file mapped in pmem? = %d\n", is_pmem);
+    maplen = mapped_len_src;
 
     /* set the root */
     TOID(struct myroot) root = POBJ_ROOT(pop, struct myroot);
     TOID(struct z_stream) strm = D_RO(root)->strm;
-    
+    POBJ_ALLOC(pop, &strm, struct z_stream, sizeof(struct z_stream), NULL, NULL);
+    pmemobj_persist(pop, D_RW(strm), sizeof(*D_RW(strm)));
+    // TX_BEGIN(pop)
+    // {
+    //     strm = TX_NEW(struct z_stream);
 
-    TX_BEGIN(pop)
-    {
-        strm = TX_NEW(struct z_stream);
-        /* allocate deflate state */
-        // D_RW(strm)->zalloc = Z_NULL;
-        // D_RW(strm)->zfree = Z_NULL;
-        // D_RW(strm)->opaque = Z_NULL;
-    } TX_END
+    // } TX_END
     
     ret = deflateInit(pop, strm, level);
     if (ret != Z_OK)
         return ret;
-    
-    
-    TX_BEGIN(pop)
-    {
-        TX_ADD(root);
-        TOID(struct InOutbuffer) io = TX_NEW(struct InOutbuffer);   
-        /* compress until end of file */
+    TOID(struct InOutbuffer) io = D_RO(root)->io;
+    POBJ_ALLOC(pop, &io, struct InOutbuffer, sizeof(struct InOutbuffer), NULL, NULL);
+    pmemobj_persist(pop, D_RW(io), sizeof(*D_RW(io)));
+    /* compress until end of file */
         do 
         {
             int input_len = 0;          /* input file length counter */
@@ -152,13 +153,13 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
             {
                 if(maplen < CHUNK)
                 {
-                    TX_MEMCPY(D_RW(io)->in, src_pmemaddr, maplen);
+                    pmemobj_memcpy_persist(pop, D_RW(io)->in, src_pmemaddr, maplen);
                     input_len = maplen;
                     maplen = 0;
                 }
                 else
                 {
-                    TX_MEMCPY(D_RW(io)->in, src_pmemaddr, CHUNK);
+                    pmemobj_memcpy_persist(pop, D_RW(io)->in, src_pmemaddr, CHUNK);
                     maplen -= CHUNK;
                     input_len = CHUNK;
                     src_pmemaddr += CHUNK;
@@ -177,9 +178,7 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
                 ret = deflate(pop, strm, flush);    /* no bad return value */
                 assert(ret != Z_STREAM_ERROR);  /* state not clobbered */
                 D_RW(io)->have = CHUNK - D_RO(strm)->avail_out;
-                // for(int i = 0; i < 100; i++)
-                //     printf("%c", D_RO(io)->out[i]);
-                if (fwrite(D_RO(io)->out, 1, D_RO(io)->have, fp) != D_RO(io)->have) 
+                if ((write(fd, D_RO(io)->out, D_RO(io)->have)) < 0) 
                 {
                     (void)deflateEnd(strm);
                     return Z_ERRNO;
@@ -193,44 +192,60 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
         assert(ret == Z_STREAM_END);        /* stream will be complete */
 
         /* clean up and return */
-        (void)deflateEnd(strm);
-    } TX_END
+        (void)deflateEnd(strm);  
     
-    TX_BEGIN(pop)
-    {
-        TX_ADD(root);
-        TX_FREE(D_RW(root)->io);
-        TX_FREE(D_RW(root)->strm);
-        D_RW(root)->io = TOID_NULL(struct InOutbuffer);
-    } TX_END
+    
+    // TX_BEGIN(pop)
+    // {
+    //     TX_ADD(root);
+    //     TOID(struct InOutbuffer) io = TX_NEW(struct InOutbuffer); 
+        
+    // } TX_END
+    
+    // TX_BEGIN(pop)
+    // {
+    //     TX_ADD(root);
+    //     TX_FREE(D_RW(root)->io);
+    //     TX_FREE(D_RW(root)->strm);
+    //     D_RW(root)->io = TOID_NULL(struct InOutbuffer);
+    // } TX_END
 
     /* turn the temp file to file discriptor and get the size */
-    fseek(fp, SEEK_SET, 0);
-    fd = fileno(fp);
-    struct stat buf;
-    if(fstat(fd, &buf) < 0)
-    {
-        perror("fstat");
-        exit(1);
-    }    
+    // fseek(fp, SEEK_SET, 0);
+    // fd = fileno(fp);
+    // struct stat buf;
+    // if(fstat(fd, &buf) < 0)
+    // {
+    //     perror("fstat");
+    //     exit(1);
+    // }    
     
-    /* map the output file to pmem */
-    if((pmemaddr = pmem_map_file(pmemfile, buf.st_size, PMEM_FILE_CREATE|PMEM_FILE_EXCL, 0666, &mapped_len, &is_pmem)) == NULL)
+    // /* map the output file to pmem */
+    // if((out_pmemaddr = pmem_map_file(pmemfile, buf.st_size, PMEM_FILE_CREATE|PMEM_FILE_EXCL, 0666, &mapped_len_out, &is_pmem)) == NULL)
+    // {
+    //     perror("pmem_map_file");
+    //     exit(1);
+    // }
+    // printf("is_pmem = %d\n", is_pmem);  /* check is_pmem is 0 or 1 */
+
+    // /* determine if range is true pmem, call appropriate copy routine */
+	// if (is_pmem)
+	//     do_copy_to_pmem(out_pmemaddr, fd, buf.st_size);
+	// else
+	//  	do_copy_to_non_pmem(out_pmemaddr, fd, buf.st_size);
+    POBJ_FREE(&io);
+    POBJ_FREE(&strm);
+    pmemobj_close(pop);
+    if(close(fd) < 0)
     {
-        perror("pmem_map_file");
+        perror("close");
         exit(1);
     }
-    printf("is_pmem = %d\n", is_pmem);  /* check is_pmem is 0 or 1 */
-
-    /* determine if range is true pmem, call appropriate copy routine */
-	if (is_pmem)
-	    do_copy_to_pmem(pmemaddr, fp, buf.st_size);
-	else
-	 	do_copy_to_non_pmem(pmemaddr, fp, buf.st_size);
-
-    pmem_unmap(pmemaddr, mapped_len);
-    fclose(fp);
-    pmemobj_close(pop);
+    pmem_unmap(src_pmemaddr, mapped_len_src);
+    //pmem_unmap(out_pmemaddr, mapped_len_out);
+    //fclose(fp);
+    
+    
     return Z_OK;
     
 }
@@ -408,16 +423,15 @@ void zerr(int ret)
 /* compress or decompress */
 int main(int argc, char **argv)
 {
-    // time_t start, end;
-    // start = clock();
     int ret;
     int level;
+    
     /* do compression if arguments = 4 */
     if (argc == 5)
     {
         /* create or open a memory pool */
         PMEMobjpool *pop;
-        if((pop = pmemobj_create(argv[3], POBJ_LAYOUT_NAME(pmem_deflate), 1073741824, 0666)) == NULL)
+        if((pop = pmemobj_create(argv[3], POBJ_LAYOUT_NAME(pmem_deflate), 104857600, 0666)) == NULL)
         {
             perror("pmemobj_create");
             return 1;
@@ -437,7 +451,7 @@ int main(int argc, char **argv)
     {
         /* create or open a memory pool */
         PMEMobjpool *pop;
-        if((pop = pmemobj_create(argv[4], POBJ_LAYOUT_NAME(pmem_deflate), 1073741824, 0666)) == NULL)
+        if((pop = pmemobj_create(argv[4], POBJ_LAYOUT_NAME(pmem_deflate), 104857600, 0666)) == NULL)
         {
             perror("pmemobj_create");
             return 1;
