@@ -25,7 +25,7 @@
 #  define SET_BINARY_MODE(file)
 #endif
 
-#define CHUNK 2097152
+#define CHUNK 262144
 
 
 
@@ -153,13 +153,13 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
             {
                 if(maplen < CHUNK)
                 {
-                    pmemobj_memcpy_persist(pop, D_RW(io)->in, src_pmemaddr, maplen);
+                    pmemobj_memcpy(pop, D_RW(io)->in, src_pmemaddr, maplen, PMEMOBJ_F_MEM_NONTEMPORAL);
                     input_len = maplen;
                     maplen = 0;
                 }
                 else
                 {
-                    pmemobj_memcpy_persist(pop, D_RW(io)->in, src_pmemaddr, CHUNK);
+                    pmemobj_memcpy(pop, D_RW(io)->in, src_pmemaddr, CHUNK, PMEMOBJ_F_MEM_NONTEMPORAL);
                     maplen -= CHUNK;
                     input_len = CHUNK;
                     src_pmemaddr += CHUNK;
