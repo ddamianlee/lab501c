@@ -931,7 +931,7 @@ void ZLIB_INTERNAL _tr_stored_block(pop, s, buf, stored_len, last)
     bi_windup(s);        /* align on byte boundary */
     put_short(s, (ush)stored_len);
     put_short(s, (ush)~stored_len);
-    pmemobj_memcpy_persist(pop, ws->pending_buf + rs->pending, (Bytef *)buf, stored_len);
+    pmemobj_memcpy(pop, ws->pending_buf + rs->pending, (Bytef *)buf, stored_len, PMEMOBJ_F_MEM_NONTEMPORAL);
     ws->pending += stored_len;
 #ifdef ZLIB_DEBUG
     s->compressed_len = (s->compressed_len + 3 + 7) & (ulg)~7L;

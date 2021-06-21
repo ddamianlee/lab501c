@@ -401,7 +401,7 @@ local void flush_pending(pop, strm)
     if (len > rstrm->avail_out) len = rstrm->avail_out;
     if (len == 0) return;
 
-    pmemobj_memcpy_persist(pop, wstrm->next_out, rs->pending_out, len);
+    pmemobj_memcpy(pop, wstrm->next_out, rs->pending_out, len, PMEMOBJ_F_MEM_NONTEMPORAL);
     wstrm->next_out  += len;
     ws->pending_out  += len;
     wstrm->total_out += len;
@@ -631,7 +631,7 @@ local unsigned read_buf(pop, strm, buf, size)
 
     wstrm->avail_in  -= len;
 
-    pmemobj_memcpy_persist(pop, buf, rstrm->next_in, len);
+    pmemobj_memcpy(pop, buf, rstrm->next_in, len, PMEMOBJ_F_MEM_NONTEMPORAL);
     if (D_RO(rstrm->state)->wrap == 1) {
         wstrm->adler = adler32(rstrm->adler, buf, len);
     }
@@ -874,7 +874,7 @@ local void fill_window(pop, s, d)
          * move the upper half to the lower one to make room in the upper half.
          */
         if (rs->strstart >= wsize+MAX_DIST(s)) {
-            pmemobj_memcpy_persist(pop, D_RW(ws->window), D_RO(rs->window) + wsize, (unsigned)wsize - more);
+            pmemobj_memcpy(pop, D_RW(ws->window), D_RO(rs->window) + wsize, (unsigned)wsize - more, PMEMOBJ_F_MEM_NONTEMPORAL);
             ws->match_start -= wsize;
             ws->strstart    -= wsize; /* we now have strstart >= MAX_DIST */
             ws->block_start -= (long) wsize;
@@ -1076,7 +1076,7 @@ local block_state deflate_stored(pop, s, d, flush)
         if (left) {
             if (left > len)
                 left = len;
-            pmemobj_memcpy_persist(pop, D_RW(ws->strm)->next_out, D_RW(ws->window) + rs->block_start, left);
+            pmemobj_memcpy(pop, D_RW(ws->strm)->next_out, D_RW(ws->window) + rs->block_start, left, PMEMOBJ_F_MEM_NONTEMPORAL);
             D_RW(ws->strm)->next_out += left;
             D_RW(ws->strm)->avail_out -= left;
             D_RW(ws->strm)->total_out += left;
@@ -1115,11 +1115,11 @@ local block_state deflate_stored(pop, s, d, flush)
             if (rs->window_size - rs->strstart <= used) {
                 /* Slide the window down. */
                 ws->strstart -= rs->w_size;
-                pmemobj_memcpy_persist(pop, D_RW(ws->window), D_RW(ws->window) + rs->w_size, rs->strstart);
+                pmemobj_memcpy(pop, D_RW(ws->window), D_RW(ws->window) + rs->w_size, rs->strstart, PMEMOBJ_F_MEM_NONTEMPORAL);
                 if (rs->matches < 2)
                     ws->matches++;   /* add a pending slide_hash() */
             }
-            pmemobj_memcpy_persist(pop, D_RW(ws->window) + rs->strstart, D_RW(ws->strm)->next_in - used, used);
+            pmemobj_memcpy(pop, D_RW(ws->window) + rs->strstart, D_RW(ws->strm)->next_in - used, used, PMEMOBJ_F_MEM_NONTEMPORAL);
             ws->strstart += used;
         }
         ws->block_start = rs->strstart;
@@ -1143,7 +1143,7 @@ local block_state deflate_stored(pop, s, d, flush)
         /* Slide the window down. */
         ws->block_start -= rs->w_size;
         ws->strstart -= rs->w_size;
-        pmemobj_memcpy_persist(pop, D_RW(ws->window), D_RW(ws->window) + rs->w_size, rs->strstart);
+        pmemobj_memcpy(pop, D_RW(ws->window), D_RW(ws->window) + rs->w_size, rs->strstart, PMEMOBJ_F_MEM_NONTEMPORAL);
         if (rs->matches < 2)
             ws->matches++;           /* add a pending slide_hash() */
         have += rs->w_size;          /* more space now */
