@@ -194,7 +194,7 @@ int def(PMEMobjpool *pop, char *src, char *pmemfile, int level)
         perror("close");
         exit(1);
     }
-    pmem_unmap(src_pmemaddr, mapped_len_src);
+    //pmem_unmap(src_pmemaddr, mapped_len_src);
     return Z_OK;
     
 }
@@ -304,7 +304,7 @@ int inf(PMEMobjpool *pop, char *src, char *pmemfile)
         perror("close");
         exit(1);
     }
-    pmem_unmap(src_pmemaddr, mapped_len);
+    //pmem_unmap(src_pmemaddr, mapped_len);
     
     return ret == Z_STREAM_END ? Z_OK : Z_DATA_ERROR;
 }
