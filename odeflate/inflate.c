@@ -440,11 +440,7 @@ unsigned copy;
     //struct inflate_state *rstate = rstate;
     
     //TOID(Byte) windowp;
-    if(POBJ_ALLOC(pop, &D_RW(strm)->windowp, Byte, 1U << rstate->wbits*sizeof(unsigned char), NULL, NULL))
-    {
-        printf("window allocation wrong");
-        exit(1);
-    }
+    
     /* if it hasn't been done already, allocate space for the window */
     if (rstate->window == Z_NULL) {
         // wstate->window = (unsigned char FAR *)
@@ -455,6 +451,11 @@ unsigned copy;
         //     printf("window allocation wrong");
         //     exit(1);
         // }
+        if(POBJ_ALLOC(pop, &D_RW(strm)->windowp, Byte, 1U << rstate->wbits*sizeof(unsigned char), NULL, NULL))
+        {
+            printf("window allocation wrong");
+            exit(1);
+        }
         wstate->window = D_RW(D_RW(strm)->windowp);
         if (rstate->window == Z_NULL) return 1;
     }
